@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { db } from "./firebase";
-import { collection, addDoc } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  getDocs,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 import "./App.css";
 
-const ADMIN_IDS = ["ajaypal.sangha", "abin.thomas", "camilo.torres "];
+const ADMIN_IDS = ["ajaypal.sangha", "abin.thomas", "camilo.torres"];
 
 const DEPARTMENT_ORDER = [
   "Others",
@@ -12,26 +18,40 @@ const DEPARTMENT_ORDER = [
   "Bagging",
   "Decant",
   "Freezer",
-  "Dispatch"
+  "Dispatch",
 ];
 
 const DEPARTMENTS = {
-  Others: ["Shift start", "Shift end", "washroom", "break", "move to another department"],
-  "Tote Wash": ["tote wash", "tote wash cleanup", "move pallets"],
-  Pick: ["Ambient picking", "ambient pick cleanup", "chill picking", "chill pick cleanup"],
-  Bagging: ["bagging", "bagging runner", "bagging cleanup"],
+  Others: ["Shift End", "Washroom", "Break", "Move To Another Department"],
+  "Tote Wash": ["Tote Wash", "Tote Wash Cleanup", "Move Pallets"],
+  Pick: ["Ambient Picking", "Ambient Pick Cleanup", "Chill Picking", "Chill Pick Cleanup"],
+  Bagging: ["Bagging", "Bagging Runner", "Bagging Cleanup"],
   Decant: [
-    "MHE", "ambient decant", "ambient decant cleanup", "Pallet cleanup",
-    "Baler task", "chill decant", "chill decant cleanup"
+    "MHE",
+    "Ambient Decant",
+    "Ambient Decant Cleanup",
+    "Pallet Cleanup",
+    "Baler Task",
+    "Chill Decant",
+    "Chill Decant Cleanup",
   ],
   Freezer: [
-    "freezer decant", "freezer putaway", "freezer pick",
-    "freezer cleanup", "unload and icing trolly"
+    "Freezer Decant",
+    "Freezer Putaway",
+    "Freezer Pick",
+    "Freezer Cleanup",
+    "Unload And Icing Trolly",
   ],
   Dispatch: [
-    "frameload", "MHE", "dekit", "van loading",
-    "dispatch cleanup", "van dekit", "trailer dekit", "trailer loading"
-  ]
+    "Frameload",
+    "MHE",
+    "Dekit",
+    "Van Loading",
+    "Dispatch Cleanup",
+    "Van Dekit",
+    "Trailer Dekit",
+    "Trailer Loading",
+  ],
 };
 
 function App() {
@@ -44,27 +64,64 @@ function App() {
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [inputError, setInputError] = useState("");
 
-
   const isCentered = !employeeId && !isAdmin;
 
-  // Timer to refresh live duration
+  /* ------------------------------------
+     FIRESTORE WRITE
+  ------------------------------------ */
+  const saveTaskToFirestore = async (task) => {
+    try {
+      await addDoc(collection(db, "taskLogs"), task);
+      console.log("Saved to Firestore:", task);
+    } catch (error) {
+      console.error("🔥 Firestore Save Error:", error);
+    }
+  };
+
+  /* ------------------------------------
+     FIRESTORE CLEAR
+  ------------------------------------ */
+  const clearFirestoreData = async () => {
+    try {
+      const snap = await getDocs(collection(db, "taskLogs"));
+      const deletions = snap.docs.map((d) =>
+        deleteDoc(doc(db, "taskLogs", d.id))
+      );
+      await Promise.all(deletions);
+      console.log("🔥 All Firestore logs cleared");
+    } catch (err) {
+      console.error("🔥 Error clearing Firestore:", err);
+    }
+  };
+
+  /* ------------------------------------
+     TICK FOR LIVE DURATIONS
+  ------------------------------------ */
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Detect admin after scan
+  /* ------------------------------------
+     ADMIN DETECT
+  ------------------------------------ */
   useEffect(() => {
     if (employeeId.trim() === "") return;
-    setIsAdmin(ADMIN_IDS.includes(employeeId));
+    setIsAdmin(ADMIN_IDS.includes(employeeId.trim()));
   }, [employeeId]);
 
+  /* ------------------------------------
+     EXIT ADMIN
+  ------------------------------------ */
   const exitAdminMode = () => {
     setIsAdmin(false);
     setEmployeeId("");
     setShowLive(false);
   };
 
+  /* ------------------------------------
+     HANDLE TASK CHANGE + SHIFT END FIX
+  ------------------------------------ */
   const handleTaskChange = async (task, department) => {
     const now = new Date();
 
@@ -77,174 +134,222 @@ function App() {
         task: old.task,
         department: old.department,
         startTime: old.startTime,
-        endTime: now.toISOString()
+        endTime: now.toISOString(),
       };
 
-      setTaskLogs(prev => [...prev, completed]);
-      await addDoc(collection(db, "taskLogs"), completed);
+      setTaskLogs((prev) => [...prev, completed]);
+      saveTaskToFirestore(completed);
     }
 
-    // Start new task
+    /* -------------------------------------------------------
+       SHIFT END LOGIC:
+       ✔ Store final "Shift End" entry with 0 duration
+       ✔ Remove from currentTasks (no live counting)
+       ✔ STOP creating new running tasks
+    ------------------------------------------------------- */
+    if (task.toLowerCase().includes("shift end")) {
+      const finalTask = {
+        employeeId,
+        task: "Shift End",
+        department,
+        startTime: now.toISOString(),
+        endTime: now.toISOString(), // duration = 0
+      };
+
+      setTaskLogs((prev) => [...prev, finalTask]);
+      saveTaskToFirestore(finalTask);
+
+      // REMOVE from currentTasks so Live View stops showing it
+      setCurrentTasks((prev) => {
+        const updated = { ...prev };
+        delete updated[employeeId];
+        return updated;
+      });
+
+      setEmployeeId("");
+      setIsAdmin(false);
+      setShowLive(false);
+      return;
+    }
+
+    /* -------------------------------------------------------
+       NORMAL TASK START
+    ------------------------------------------------------- */
     const newTask = {
       employeeId,
       task,
       department,
       startTime: now.toISOString(),
-      endTime: null
+      endTime: null,
     };
 
-    setCurrentTasks(prev => ({ ...prev, [employeeId]: newTask }));
-    await addDoc(collection(db, "taskLogs"), newTask);
+    setCurrentTasks((prev) => ({ ...prev, [employeeId]: newTask }));
+    saveTaskToFirestore(newTask);
 
-    // Reset user back to scan
     setEmployeeId("");
     setIsAdmin(false);
     setShowLive(false);
   };
 
+  /* ------------------------------------
+     CALCULATE DURATION
+  ------------------------------------ */
   const getDuration = (task) => {
     const start = new Date(task.startTime);
     const end = task.endTime ? new Date(task.endTime) : new Date();
     const diff = Math.floor((end - start) / 1000);
+
     const h = String(Math.floor(diff / 3600)).padStart(2, "0");
     const m = String(Math.floor((diff % 3600) / 60)).padStart(2, "0");
     const s = String(diff % 60).padStart(2, "0");
+
     return `${h}:${m}:${s}`;
   };
 
-const exportCSV = (rows) => {
-  if (rows.length === 0) return;
+  /* ------------------------------------
+     CSV EXPORT (NO RUNNING TASKS)
+  ------------------------------------ */
+  const exportCSV = (rows) => {
+    if (rows.length === 0) return;
 
-  // Add duration to each row
-  const enriched = rows.map(r => ({
-    ...r,
-    duration: getDuration(r)
-  }));
+    // Filter out ongoing tasks (endTime = null)
+    const completedOnly = rows.filter((r) => r.endTime !== null);
 
-  // ---- GROUP BY EMPLOYEE ----
-  const grouped = {};
-  enriched.forEach((row) => {
-    if (!grouped[row.employeeId]) grouped[row.employeeId] = [];
-    grouped[row.employeeId].push(row);
-  });
+    const enriched = completedOnly.map((r) => ({
+      ...r,
+      duration: getDuration(r),
+    }));
 
-  // Sort employee names
-  const employees = Object.keys(grouped).sort();
-
-  let csv = "";
-
-  employees.forEach(emp => {
-    csv += `Employee: ${emp}\n`;
-
-    const userRows = grouped[emp].sort(
-      (a, b) => new Date(a.startTime) - new Date(b.startTime)
-    );
-
-    const headers = Object.keys(userRows[0]).join(",");
-    csv += headers + "\n";
-
-    userRows.forEach(r => {
-      csv += Object.values(r)
-        .map(v => `"${v}"`)
-        .join(",") + "\n";
+    const grouped = {};
+    enriched.forEach((r) => {
+      if (!grouped[r.employeeId]) grouped[r.employeeId] = [];
+      grouped[r.employeeId].push(r);
     });
 
-    csv += "\n"; // spacing between users
-  });
+    const employees = Object.keys(grouped).sort();
+    let csv = "";
 
-  // Download the CSV file
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
+    employees.forEach((emp) => {
+      csv += `Employee: ${emp}\n`;
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "task-report.csv";
-  a.click();
-};
+      const sorted = grouped[emp].sort(
+        (a, b) => new Date(a.startTime) - new Date(b.startTime)
+      );
 
-const ClearDataDialog = () => (
-  <div className="dialog-overlay">
-    <div className="dialog-box">
-      <h3>Clear All Data?</h3>
-      <p>This action will remove all task logs and cannot be undone.</p>
+      const headers = Object.keys(sorted[0]).join(",");
+      csv += headers + "\n";
 
-      <div className="dialog-buttons">
-        <button
-          className="confirm-clear"
-          onClick={() => {
-            setTaskLogs([]);
-            setCurrentTasks({});
-            setShowClearDialog(false);
-          }}
-        >
-          Clear
-        </button>
+      sorted.forEach((row) => {
+        csv += Object.values(row)
+          .map((v) => `"${v}"`)
+          .join(",") + "\n";
+      });
 
-        <button
-          className="cancel-clear"
-          onClick={() => setShowClearDialog(false)}
-        >
-          Cancel
-        </button>
+      csv += "\n";
+    });
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "task-report.csv";
+    a.click();
+  };
+
+  /* ------------------------------------
+     VALIDATE INPUT
+  ------------------------------------ */
+  const validEmployeeId = (id) => {
+    const pattern = /^[a-z]+(?:\.[a-z]+)(?:\d+)?$/;
+    return pattern.test(id);
+  };
+
+  /* ------------------------------------
+     CLEAR DATA DIALOG
+  ------------------------------------ */
+  const ClearDataDialog = () => (
+    <div className="dialog-overlay">
+      <div className="dialog-box">
+        <h3>Clear All Data?</h3>
+        <p>This will delete all logs from Database and this device.</p>
+
+        <div className="dialog-buttons">
+          <button
+            className="confirm-clear"
+            onClick={async () => {
+              setTaskLogs([]);
+              setCurrentTasks({});
+              await clearFirestoreData();
+              setShowClearDialog(false);
+            }}
+          >
+            Clear
+          </button>
+
+          <button
+            className="cancel-clear"
+            onClick={() => setShowClearDialog(false)}
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 
-const validEmployeeId = (id) => {
-  // matches: firstname.lastname or firstname.lastname3
-  const pattern = /^[a-z]+(?:\.[a-z]+)(?:\d+)?$/;
-  return pattern.test(id);
-};
-
+  /* ------------------------------------
+     UI
+  ------------------------------------ */
   return (
     <div id="root">
-      
-      {/* ------------------ TITLE & INPUT AREA ------------------ */}
+
+      {showClearDialog && <ClearDataDialog />}
+
       <div className={isCentered ? "center-screen" : "top-screen"}>
         <h1>Task Tracker</h1>
 
         {!isAdmin && (
-          <input
-            placeholder="Scan Employee ID"
-            value={employeeId}
-            onChange={(e) => {
-              const value = e.target.value.toLowerCase().trim();
+          <>
+            <input
+              placeholder="Scan Employee ID"
+              value={employeeId}
+              onChange={(e) => {
+                const value = e.target.value.toLowerCase().trim();
 
-              // Allow empty while typing
-              if (value === "") {
-                setEmployeeId("");
-                return;
-              }
+                if (value === "") {
+                  setEmployeeId("");
+                  return;
+                }
 
-              // Reject invalid patterns visually but don't block typing
-              if (!validEmployeeId(value)) {
-                setInputError("Invalid format. Use firstname.lastname or firstname.lastname2");
+                if (!validEmployeeId(value)) {
+                  setInputError(
+                    "Invalid format. Use firstname.lastname or firstname.lastname2"
+                  );
+                  setEmployeeId(value);
+                  return;
+                }
+
+                setInputError("");
                 setEmployeeId(value);
-                return;
-              }
+              }}
+              autoFocus
+            />
 
-              // Valid
-              setInputError("");
-              setEmployeeId(value);
-            }}
-
-            autoFocus
-          />
-          
+            {inputError && (
+              <div className="input-error">{inputError}</div>
+            )}
+          </>
         )}
-        {inputError && (
-          <div className="input-error">{inputError}</div>
-        )}
-
       </div>
 
-      {/* ------------------ ADMIN MODE ------------------ */}
+      {/* ADMIN UI */}
       {isAdmin && (
         <div style={{ textAlign: "center" }}>
           <h2>ADMIN MODE ({employeeId})</h2>
+
           <div className="admin-buttons">
-            <button onClick={() => setShowLive(v => !v)}>
+            <button onClick={() => setShowLive((v) => !v)}>
               {showLive ? "Hide Live View" : "View Live"}
             </button>
 
@@ -267,11 +372,10 @@ const validEmployeeId = (id) => {
               Exit Admin Mode
             </button>
           </div>
-
         </div>
       )}
 
-      {/* ------------------ LIVE VIEW ------------------ */}
+      {/* LIVE VIEW */}
       {isAdmin && showLive && (
         <div className="live-container">
           <table>
@@ -299,14 +403,15 @@ const validEmployeeId = (id) => {
         </div>
       )}
 
-      {/* ------------------ EMPLOYEE TASK BUTTONS ------------------ */}
+      {/* TASK BUTTONS */}
       {!isAdmin && employeeId && (
         <div className="task-grid">
-          {DEPARTMENT_ORDER.map(dep => (
+          {DEPARTMENT_ORDER.map((dep) => (
             <div className="task-group" key={dep}>
               <h3>{dep}</h3>
+
               <div className="task-buttons">
-                {DEPARTMENTS[dep].map(task => (
+                {DEPARTMENTS[dep].map((task) => (
                   <button
                     key={task}
                     onClick={() => handleTaskChange(task, dep)}
@@ -319,7 +424,6 @@ const validEmployeeId = (id) => {
           ))}
         </div>
       )}
-      {showClearDialog && <ClearDataDialog />}
     </div>
   );
 }

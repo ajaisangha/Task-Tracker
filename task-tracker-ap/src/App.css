@@ -181,14 +181,18 @@ button.exit-admin:hover {
    LIVE VIEW TABLE
 ---------------------------------- */
 .live-container {
-  width: 95%;
+  width: 100%;
   max-height: 65vh;
   overflow-y: auto;
   margin-top: 1rem;
+
+  display: flex;
+  justify-content: center;   /* centers the table */
 }
 
 table {
-  width: 100%;
+  width: auto;              /* shrink to content */
+  min-width: 600px;         /* keeps readable layout */
   border-collapse: collapse;
   font-size: clamp(0.7rem, 1.5vw, 1rem);
 }
