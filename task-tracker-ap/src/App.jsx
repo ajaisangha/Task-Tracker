@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import { collection, addDoc } from "firebase/firestore";
 import "./App.css";
 
-const ADMIN_IDS = ["ajaypal.sangha", "abin.thomas"];
+const ADMIN_IDS = ["ajaypal.sangha", "abin.thomas", "camilo.torres "];
 
 const DEPARTMENT_ORDER = [
   "Others",
@@ -42,6 +42,7 @@ function App() {
   const [showLive, setShowLive] = useState(false);
   const [tick, setTick] = useState(0);
   const [showClearDialog, setShowClearDialog] = useState(false);
+  const [inputError, setInputError] = useState("");
 
 
   const isCentered = !employeeId && !isAdmin;
@@ -190,6 +191,11 @@ const ClearDataDialog = () => (
   </div>
 );
 
+const validEmployeeId = (id) => {
+  // matches: firstname.lastname or firstname.lastname3
+  const pattern = /^[a-z]+(?:\.[a-z]+)(?:\d+)?$/;
+  return pattern.test(id);
+};
 
   return (
     <div id="root">
@@ -202,10 +208,35 @@ const ClearDataDialog = () => (
           <input
             placeholder="Scan Employee ID"
             value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value.toLowerCase())}
+            onChange={(e) => {
+              const value = e.target.value.toLowerCase().trim();
+
+              // Allow empty while typing
+              if (value === "") {
+                setEmployeeId("");
+                return;
+              }
+
+              // Reject invalid patterns visually but don't block typing
+              if (!validEmployeeId(value)) {
+                setInputError("Invalid format. Use firstname.lastname or firstname.lastname2");
+                setEmployeeId(value);
+                return;
+              }
+
+              // Valid
+              setInputError("");
+              setEmployeeId(value);
+            }}
+
             autoFocus
           />
+          
         )}
+        {inputError && (
+          <div className="input-error">{inputError}</div>
+        )}
+
       </div>
 
       {/* ------------------ ADMIN MODE ------------------ */}

@@ -273,3 +273,9 @@ table td {
 .cancel-clear:hover {
   background-color: #6E95FF;
 }
+
+.input-error {
+  color: red;
+  margin-top: 0.3rem;
+  font-size: 0.9rem;
+}
