@@ -1,3 +1,13 @@
+// ===============================
+// FULL UPDATED App.jsx
+// With Date Range History,
+// Merged rows,
+// Pre-confirmation dialog,
+// Clear logic,
+// Admin scroll,
+// Stable UI
+// ===============================
+
 import React, { useState, useEffect } from "react";
 import { db } from "./firebase";
 import {
@@ -14,6 +24,9 @@ import {
 } from "firebase/firestore";
 import "./App.css";
 
+// ===============================
+// CONSTANTS
+// ===============================
 const ADMIN_IDS = ["ajaypal.sangha", "abin.thomas", "camilo.torres"];
 
 const DEPARTMENT_ORDER = [
@@ -61,61 +74,75 @@ const DEPARTMENTS = {
 
 const CSV_HEADERS = ["task", "department", "startTime", "endTime", "duration"];
 
+// ===============================
+// MAIN COMPONENT
+// ===============================
 function App() {
+  // ------------------------------
+  // STATE
+  // ------------------------------
   const [employeeId, setEmployeeId] = useState("");
   const [currentTasks, setCurrentTasks] = useState({});
   const [taskLogs, setTaskLogs] = useState([]);
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [showLive, setShowLive] = useState(false);
   const [tick, setTick] = useState(0);
-  const [showClearDialog, setShowClearDialog] = useState(false);
-  const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false);
-  const [inputError, setInputError] = useState("");
-  const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  // Date-range history
+  const [inputError, setInputError] = useState("");
+
+  // History
   const [showHistory, setShowHistory] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // Clear dialogs
+  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false);
+
+  // NEW: Pre-confirmation dialog
+  const [showPreConfirmDialog, setShowPreConfirmDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // "clearHistory", "clearCurrent"
 
   const isCentered = !employeeId && !isAdmin;
 
-  /* ---------------------------------------------------
-      TIMER (Updates durations live)
-  --------------------------------------------------- */
+  // ===============================
+  // TIMER FOR LIVE DURATION
+  // ===============================
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  /* ---------------------------------------------------
-      SUBSCRIBE TO ACTIVE TASKS
-  --------------------------------------------------- */
+  // ===============================
+  // LIVE activeTasks subscription
+  // ===============================
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "activeTasks"), (snap) => {
-      const active = {};
-      snap.forEach((d) => (active[d.id] = d.data()));
-      setCurrentTasks(active);
+      const map = {};
+      snap.forEach((d) => (map[d.id] = d.data()));
+      setCurrentTasks(map);
     });
     return () => unsub();
   }, []);
 
-  /* ---------------------------------------------------
-      LOAD COMPLETED LOGS ON START
-  --------------------------------------------------- */
+  // ===============================
+  // Load logs on start
+  // ===============================
   useEffect(() => {
     const loadLogs = async () => {
       const qLogs = query(collection(db, "taskLogs"), orderBy("startTime"));
       const snap = await getDocs(qLogs);
-      setTaskLogs(snap.docs.map(d => d.data()));
+      setTaskLogs(snap.docs.map((d) => d.data()));
     };
     loadLogs();
   }, []);
 
-  /* ---------------------------------------------------
-      ADMIN DETECT
-  --------------------------------------------------- */
+  // ===============================
+  // ADMIN DETECT
+  // ===============================
   useEffect(() => {
     if (!employeeId) return;
     setIsAdmin(ADMIN_IDS.includes(employeeId));
@@ -128,32 +155,24 @@ function App() {
     setShowHistory(false);
   };
 
-  /* ---------------------------------------------------
-      VALIDATE COMPLETED ROW
-  --------------------------------------------------- */
+  // ===============================
+  // SAVE COMPLETED TASK
+  // ===============================
   const isValidCompletedRow = (row) =>
-    row &&
-    row.employeeId &&
-    row.task &&
-    row.department &&
-    row.startTime &&
-    row.endTime;
+    row?.employeeId && row?.task && row?.department && row?.startTime && row?.endTime;
 
-  /* ---------------------------------------------------
-      SAVE TASK LOG
-  --------------------------------------------------- */
-  const saveCompletedTask = async (task) => {
-    if (!isValidCompletedRow(task)) return;
-    await addDoc(collection(db, "taskLogs"), task);
-    setTaskLogs(prev => [...prev, task]);
+  const saveCompletedTask = async (row) => {
+    if (!isValidCompletedRow(row)) return;
+    await addDoc(collection(db, "taskLogs"), row);
+    setTaskLogs((p) => [...p, row]);
   };
 
-  /* ---------------------------------------------------
-      HANDLE TASK CHANGE
-  --------------------------------------------------- */
+  // ===============================
+  // HANDLE TASK CHANGE
+  // ===============================
   const handleTaskChange = async (task, department) => {
     const id = employeeId.trim();
-    const nowISO = new Date().toISOString();
+    const now = new Date().toISOString();
 
     // Close previous task if exists
     if (currentTasks[id]) {
@@ -163,31 +182,32 @@ function App() {
         task: old.task,
         department: old.department,
         startTime: old.startTime,
-        endTime: nowISO,
+        endTime: now,
       });
     }
 
-    // Shift End
+    // SHIFT END
     if (task.toLowerCase().includes("shift end")) {
       await saveCompletedTask({
         employeeId: id,
         task: "Shift End",
         department,
-        startTime: nowISO,
-        endTime: nowISO,
+        startTime: now,
+        endTime: now,
       });
+
       await deleteDoc(doc(db, "activeTasks", id));
       setEmployeeId("");
       setIsAdmin(false);
       return;
     }
 
-    // Normal task → activeTasks
+    // Normal task
     await setDoc(doc(db, "activeTasks", id), {
       employeeId: id,
       task,
       department,
-      startTime: nowISO,
+      startTime: now,
       endTime: null,
     });
 
@@ -195,9 +215,9 @@ function App() {
     setIsAdmin(false);
   };
 
-  /* ---------------------------------------------------
-      DURATION
-  --------------------------------------------------- */
+  // ===============================
+  // DURATION HELPERS
+  // ===============================
   const durationFromSecs = (secs) => {
     const s = Math.max(0, Math.floor(secs));
     return (
@@ -215,19 +235,16 @@ function App() {
     return durationFromSecs((end - start) / 1000);
   };
 
-  /* ---------------------------------------------------
-      MERGE SAME EMPLOYEE + TASK + DATE
-  --------------------------------------------------- */
+  // ===============================
+  // MERGE HISTORY ROWS
+  // ===============================
   const mergeHistoryRows = (rows) => {
     const grouped = {};
 
     rows.forEach((r) => {
       const key = `${r.employeeId}__${r.task}__${r.date}`;
       if (!grouped[key]) {
-        grouped[key] = {
-          ...r,
-          durationSecs: Number(r.durationSecs) || 0
-        };
+        grouped[key] = { ...r, durationSecs: Number(r.durationSecs) || 0 };
       } else {
         grouped[key].durationSecs += Number(r.durationSecs) || 0;
       }
@@ -236,12 +253,12 @@ function App() {
     return Object.values(grouped);
   };
 
-  /* ---------------------------------------------------
-      CSV EXPORT — CURRENT LOGS
-  --------------------------------------------------- */
+  // ===============================
+  // EXPORT CURRENT CSV
+  // ===============================
   const exportCSV = async () => {
     const snap = await getDocs(query(collection(db, "taskLogs"), orderBy("startTime")));
-    const rows = snap.docs.map(d => d.data());
+    const rows = snap.docs.map((d) => d.data());
     if (!rows.length) return;
 
     const grouped = {};
@@ -255,15 +272,12 @@ function App() {
     Object.keys(grouped)
       .sort()
       .forEach((emp) => {
-        csv += `Employee: ${emp}\n`;
-        csv += CSV_HEADERS.join(",") + "\n";
-
+        csv += `Employee: ${emp}\n${CSV_HEADERS.join(",")}\n`;
         grouped[emp]
           .sort((a, b) => a.startTime.localeCompare(b.startTime))
           .forEach((r) => {
             csv += CSV_HEADERS.map((h) => `"${r[h] ?? ""}"`).join(",") + "\n";
           });
-
         csv += "\n";
       });
 
@@ -274,13 +288,13 @@ function App() {
     a.click();
   };
 
-  /* ---------------------------------------------------
-      LOAD DATE-RANGE HISTORY
-  --------------------------------------------------- */
+  // ===============================
+  // LOAD DATE-RANGE HISTORY
+  // ===============================
   const loadDateRangeHistory = async () => {
     if (!startDate || !endDate) return;
 
-    setHistoryLoaded(false); // reset before loading
+    setHistoryLoaded(false);
 
     const qHist = query(
       collection(db, "weeklyHistory"),
@@ -289,28 +303,25 @@ function App() {
     );
 
     const snap = await getDocs(qHist);
-    const raw = snap.docs.map((d) => d.data());
+    const merged = mergeHistoryRows(snap.docs.map((d) => d.data()));
 
-    setHistoryRows(mergeHistoryRows(raw));
-    setHistoryLoaded(true); // now allow showing results
+    setHistoryRows(merged);
+    setHistoryLoaded(true);
   };
 
-  /* ---------------------------------------------------
-      CSV EXPORT — HISTORY (MERGED)
-  --------------------------------------------------- */
+  // ===============================
+  // EXPORT HISTORY CSV
+  // ===============================
   const exportWeeklyCSV = () => {
     if (!historyRows.length) return;
 
-    const merged = mergeHistoryRows(historyRows);
-
     const grouped = {};
-    merged.forEach((r) => {
+    historyRows.forEach((r) => {
       if (!grouped[r.employeeId]) grouped[r.employeeId] = [];
       grouped[r.employeeId].push(r);
     });
 
     let csv = "";
-
     Object.keys(grouped)
       .sort()
       .forEach((emp) => {
@@ -335,36 +346,41 @@ function App() {
     a.click();
   };
 
-  /* ---------------------------------------------------
-      CLEAR WEEKLY HISTORY
-  --------------------------------------------------- */
+  // ===============================
+  // CLEAR WEEKLY HISTORY
+  // ===============================
   const clearWeeklyHistory = async () => {
     const snap = await getDocs(collection(db, "weeklyHistory"));
     await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
     setHistoryRows([]);
   };
 
-  /* ---------------------------------------------------
-      MOVE LOGS → WEEKLY HISTORY + CLEAR LIVE DATA
-  --------------------------------------------------- */
+  // ===============================
+  // MOVE LOGS → WEEKLY HISTORY & CLEAR
+  // ===============================
   const moveLogsToHistoryAndClear = async () => {
     const snap = await getDocs(collection(db, "taskLogs"));
     const docs = snap.docs.map((d) => d.data());
 
+    // Move to history
     await Promise.all(
       docs.map((log) =>
         addDoc(collection(db, "weeklyHistory"), {
           employeeId: log.employeeId,
           task: log.task,
           department: log.department,
-          durationSecs: Math.floor((new Date(log.endTime) - new Date(log.startTime)) / 1000),
+          durationSecs: Math.floor(
+            (new Date(log.endTime) - new Date(log.startTime)) / 1000
+          ),
           date: log.startTime.slice(0, 10),
         })
       )
     );
 
+    // Clear logs
     await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
 
+    // Clear active tasks
     const activeSnap = await getDocs(collection(db, "activeTasks"));
     await Promise.all(activeSnap.docs.map((d) => deleteDoc(d.ref)));
 
@@ -372,18 +388,92 @@ function App() {
     setCurrentTasks({});
   };
 
-  /* ---------------------------------------------------
-      UI
-  --------------------------------------------------- */
+  // ===============================
+  // UI START
+  // ===============================
   return (
     <div id="root">
 
-      {/* CLEAR HISTORY DIALOG */}
+      {/* =======================
+          PRE-CONFIRMATION DIALOG
+      ======================== */}
+      {showPreConfirmDialog && (
+        <div className="dialog-overlay">
+          <div className="dialog-box">
+            <h3>Have you saved the data?</h3>
+
+            <div className="dialog-buttons">
+              <button
+                className="confirm-clear"
+                onClick={() => {
+                  setShowPreConfirmDialog(false);
+
+                  if (pendingAction === "clearCurrent") {
+                    setShowClearDialog(true);
+                  } else if (pendingAction === "clearHistory") {
+                    setShowClearHistoryDialog(true);
+                  }
+
+                  setPendingAction(null);
+                }}
+              >
+                Yes
+              </button>
+
+              <button
+                className="cancel-clear"
+                onClick={() => {
+                  setShowPreConfirmDialog(false);
+                  setPendingAction(null);
+                }}
+              >
+                No
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =======================
+          CLEAR CURRENT DATA DIALOG
+      ======================== */}
+      {showClearDialog && (
+        <div className="dialog-overlay">
+          <div className="dialog-box">
+            <h3>Move Logs to History & Clear?</h3>
+            <p>This moves all completed logs to history and clears everything.</p>
+
+            <div className="dialog-buttons">
+              <button
+                className="confirm-clear"
+                onClick={async () => {
+                  await moveLogsToHistoryAndClear();
+                  setShowClearDialog(false);
+                }}
+              >
+                Clear
+              </button>
+
+              <button
+                className="cancel-clear"
+                onClick={() => setShowClearDialog(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =======================
+          CLEAR HISTORY DIALOG
+      ======================== */}
       {showClearHistoryDialog && (
         <div className="dialog-overlay">
           <div className="dialog-box">
             <h3>Clear Weekly History?</h3>
-            <p>This will permanently delete all stored weekly history records.</p>
+            <p>This will permanently delete all history records.</p>
+
             <div className="dialog-buttons">
               <button
                 className="confirm-clear"
@@ -394,7 +484,11 @@ function App() {
               >
                 Clear
               </button>
-              <button className="cancel-clear" onClick={() => setShowClearHistoryDialog(false)}>
+
+              <button
+                className="cancel-clear"
+                onClick={() => setShowClearHistoryDialog(false)}
+              >
                 Cancel
               </button>
             </div>
@@ -402,7 +496,9 @@ function App() {
         </div>
       )}
 
-      {/* MAIN TITLE + INPUT */}
+      {/* =======================
+          MAIN TITLE + INPUT
+      ======================== */}
       <div className={isCentered ? "center-screen" : "top-screen"}>
         <h1>Task Tracker</h1>
 
@@ -428,7 +524,9 @@ function App() {
         )}
       </div>
 
-      {/* ADMIN MODE */}
+      {/* =======================
+          ADMIN MODE
+      ======================== */}
       {isAdmin && (
         <div className="admin-scroll">
 
@@ -436,13 +534,23 @@ function App() {
             <h2>ADMIN MODE ({employeeId})</h2>
 
             <div className="admin-buttons">
+
               <button onClick={() => setShowLive(!showLive)}>
                 {showLive ? "Hide Live View" : "View Live"}
               </button>
 
-              <button onClick={exportCSV}>Download Current CSV</button>
+              <button onClick={exportCSV}>
+                Download Current CSV
+              </button>
 
-              <button className="clear-data" onClick={() => setShowClearDialog(true)}>
+              {/* NEW pre-confirm dialog trigger */}
+              <button
+                className="clear-data"
+                onClick={() => {
+                  setPendingAction("clearCurrent");
+                  setShowPreConfirmDialog(true);
+                }}
+              >
                 Move to History & Clear
               </button>
 
@@ -450,9 +558,13 @@ function App() {
                 {showHistory ? "Hide History" : "View History"}
               </button>
 
+              {/* NEW pre-confirm dialog trigger */}
               <button
                 className="clear-data"
-                onClick={() => setShowClearHistoryDialog(true)}
+                onClick={() => {
+                  setPendingAction("clearHistory");
+                  setShowPreConfirmDialog(true);
+                }}
               >
                 Clear Weekly History
               </button>
@@ -460,10 +572,13 @@ function App() {
               <button className="exit-admin" onClick={exitAdminMode}>
                 Exit Admin Mode
               </button>
+
             </div>
           </div>
 
-          {/* LIVE VIEW */}
+          {/* =======================
+              LIVE VIEW
+          ======================== */}
           {showLive && (
             <div className="live-container">
               <table>
@@ -491,21 +606,26 @@ function App() {
             </div>
           )}
 
-          {/* HISTORY DATE RANGE VIEW */}
+          {/* =======================
+              HISTORY VIEW
+          ======================== */}
           {showHistory && (
             <div className="history-container">
-              <h2 style={{ textAlign: "center", width: "100%", marginBottom: "8px" }}>
+              <h2 style={{ textAlign: "center", marginBottom: "8px" }}>
                 History (Date Range)
               </h2>
 
               <div className="history-controls">
-
                 <label>
                   Start:
                   <input
                     type="date"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setHistoryLoaded(false);
+                      setHistoryRows([]);
+                    }}
                   />
                 </label>
 
@@ -514,21 +634,21 @@ function App() {
                   <input
                     type="date"
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setHistoryLoaded(false);
+                      setHistoryRows([]);
+                    }}
                   />
                 </label>
 
-                <button
-                  onClick={loadDateRangeHistory}
-                  disabled={!startDate || !endDate}
-                >
+                <button onClick={loadDateRangeHistory}
+                        disabled={!startDate || !endDate}>
                   Load
                 </button>
 
-                <button
-                  onClick={exportWeeklyCSV}
-                  disabled={!historyRows.length}
-                >
+                <button onClick={exportWeeklyCSV}
+                        disabled={!historyRows.length}>
                   Download CSV
                 </button>
 
@@ -545,6 +665,7 @@ function App() {
                 </button>
               </div>
 
+              {/* Results */}
               <div className="history-output">
                 {historyLoaded && historyRows.length === 0 && (
                   <p>No records found.</p>
@@ -571,7 +692,6 @@ function App() {
                             <th>Duration</th>
                           </tr>
                         </thead>
-
                         <tbody>
                           {rows
                             .sort((a, b) => a.date.localeCompare(b.date))
@@ -587,17 +707,20 @@ function App() {
                       </table>
                     </div>
                   ))}
+
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* USER MODE */}
+      {/* =======================
+          USER MODE (TASK BUTTONS)
+      ======================== */}
       {!isAdmin && employeeId && (
         <div className="task-grid">
           {DEPARTMENT_ORDER.map((dep) => (
-            <div className="task-group" key={dep}>
+            <div key={dep} className="task-group">
               <h3>{dep}</h3>
               <div className="task-buttons">
                 {DEPARTMENTS[dep].map((task) => (
@@ -610,6 +733,7 @@ function App() {
           ))}
         </div>
       )}
+
     </div>
   );
 }
