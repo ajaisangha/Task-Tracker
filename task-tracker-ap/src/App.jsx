@@ -27,6 +27,11 @@ const ADMIN_IDS = [
   "arjaree.leenaungkoonruji",
 ];
 
+const ADMIN_PASSWORD = "voila2026";
+const ADMIN_SALT = "Ajaipal";
+// MD5("voila2026Ajaipal") = 96682ce68e5a064a34db9283597a27d0
+// For this app we know the plaintext, so we just check the password directly.
+
 const DEPARTMENT_ORDER = [
   "Others",
   "Tote Wash",
@@ -91,20 +96,23 @@ const CSV_HEADERS = ["task", "department", "startTime", "endTime", "duration"];
 // MAIN COMPONENT
 // ===============================
 function App() {
-  // ------------------------------
-  // STATE
-  // ------------------------------
+  // Core state
   const [employeeId, setEmployeeId] = useState("");
   const [currentTasks, setCurrentTasks] = useState({});
   const [taskLogs, setTaskLogs] = useState([]);
 
-  const [isAdmin, setIsAdmin] = useState(false);
+  // Admin state
+  const [isAdminId, setIsAdminId] = useState(false); // ID is in ADMIN_IDS
+  const [adminAuthenticated, setAdminAuthenticated] = useState(false); // password OK
   const [showLive, setShowLive] = useState(false);
+
+  // Timing
   const [tick, setTick] = useState(0);
 
+  // Input validation
   const [inputError, setInputError] = useState("");
 
-  // History
+  // History state
   const [showHistory, setShowHistory] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -115,13 +123,25 @@ function App() {
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false);
 
-  // Pre-confirmation dialog
+  // Pre-confirm dialog state
   const [showPreConfirmDialog, setShowPreConfirmDialog] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null); // "clearHistory", "clearCurrent"
+  const [pendingAction, setPendingAction] = useState(null); // "clearCurrent" | "clearHistory" | null
 
-  const isCentered = !employeeId && !isAdmin;
+  // Admin password dialog
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
-  const employeeIdRegex = /^[a-z]+(?:\.[a-z]+)(?:\d+)?$/;
+  const isCentered = !employeeId && !adminAuthenticated;
+
+  const isEmployeeIdValidFormat = (id) =>
+    /^[a-z]+(?:\.[a-z]+)(?:\d+)?$/.test(id);
+
+  const canShowTaskButtons =
+    !adminAuthenticated &&
+    !isAdminId &&
+    !!employeeId &&
+    !inputError; // prevents invalid ID from selecting tasks
 
   // ===============================
   // TIMER FOR LIVE DURATION
@@ -156,26 +176,41 @@ function App() {
   }, []);
 
   // ===============================
-  // ADMIN DETECT
+  // ADMIN ID DETECT → trigger password dialog
   // ===============================
   useEffect(() => {
-    if (!employeeId) return;
-    setIsAdmin(ADMIN_IDS.includes(employeeId));
-  }, [employeeId]);
+    if (!employeeId || !isEmployeeIdValidFormat(employeeId)) {
+      setIsAdminId(false);
+      return;
+    }
+
+    const isAdmin = ADMIN_IDS.includes(employeeId);
+    setIsAdminId(isAdmin);
+
+    if (isAdmin && !adminAuthenticated) {
+      setShowPasswordDialog(true);
+      setPasswordError("");
+      setAdminPassword("");
+    }
+  }, [employeeId, adminAuthenticated]);
 
   const exitAdminMode = () => {
-    setIsAdmin(false);
+    setAdminAuthenticated(false);
+    setIsAdminId(false);
     setEmployeeId("");
     setShowLive(false);
     setShowHistory(false);
-    setInputError("");
   };
 
   // ===============================
   // SAVE COMPLETED TASK
   // ===============================
   const isValidCompletedRow = (row) =>
-    row?.employeeId && row?.task && row?.department && row?.startTime && row?.endTime;
+    row?.employeeId &&
+    row?.task &&
+    row?.department &&
+    row?.startTime &&
+    row?.endTime;
 
   const saveCompletedTask = async (row) => {
     if (!isValidCompletedRow(row)) return;
@@ -187,14 +222,10 @@ function App() {
   // HANDLE TASK CHANGE
   // ===============================
   const handleTaskChange = async (task, department) => {
+    // block if ID invalid or we are in admin mode
+    if (!employeeId || inputError || isAdminId || adminAuthenticated) return;
+
     const id = employeeId.trim();
-
-    // HARD GUARD: do not allow if ID invalid
-    if (!employeeIdRegex.test(id)) {
-      setInputError("Invalid format");
-      return;
-    }
-
     const now = new Date().toISOString();
 
     // Close previous task if exists
@@ -221,7 +252,6 @@ function App() {
 
       await deleteDoc(doc(db, "activeTasks", id));
       setEmployeeId("");
-      setIsAdmin(false);
       return;
     }
 
@@ -235,7 +265,6 @@ function App() {
     });
 
     setEmployeeId("");
-    setIsAdmin(false);
   };
 
   // ===============================
@@ -280,9 +309,7 @@ function App() {
   // EXPORT CURRENT CSV
   // ===============================
   const exportCSV = async () => {
-    const snap = await getDocs(
-      query(collection(db, "taskLogs"), orderBy("startTime"))
-    );
+    const snap = await getDocs(query(collection(db, "taskLogs"), orderBy("startTime")));
     const rows = snap.docs.map((d) => d.data());
     if (!rows.length) return;
 
@@ -378,6 +405,7 @@ function App() {
     const snap = await getDocs(collection(db, "weeklyHistory"));
     await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
     setHistoryRows([]);
+    setHistoryLoaded(false);
   };
 
   // ===============================
@@ -414,28 +442,92 @@ function App() {
   };
 
   // ===============================
-  // UI START
+  // ADMIN PASSWORD HANDLERS
+  // ===============================
+  const handlePasswordSubmit = () => {
+    if (adminPassword === ADMIN_PASSWORD) {
+      setAdminAuthenticated(true);
+      setShowPasswordDialog(false);
+      setPasswordError("");
+    } else {
+      setPasswordError("Incorrect password.");
+    }
+  };
+
+  const handlePasswordCancel = () => {
+    // Cancel admin login, revert to normal
+    setShowPasswordDialog(false);
+    setPasswordError("");
+    setAdminPassword("");
+    setAdminAuthenticated(false);
+    setIsAdminId(false);
+    setEmployeeId("");
+  };
+
+  // ===============================
+  // RENDER
   // ===============================
   return (
     <div id="root">
-      {/* PRE-CONFIRMATION DIALOG */}
+      {/* =======================
+          ADMIN PASSWORD DIALOG
+      ======================== */}
+      {showPasswordDialog && (
+        <div className="dialog-overlay">
+          <div className="dialog-box">
+            <h3>Admin Login</h3>
+            <p>Enter admin password for: <strong>{employeeId}</strong></p>
+
+            <input
+              type="password"
+              placeholder="Password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              style={{ margin: "0.5rem 0", width: "100%", boxSizing: "border-box" }}
+            />
+
+            {passwordError && (
+              <div className="input-error" style={{ marginBottom: "0.5rem" }}>
+                {passwordError}
+              </div>
+            )}
+
+            <div className="dialog-buttons">
+              <button
+                className="confirm-clear"
+                onClick={handlePasswordSubmit}
+              >
+                Login
+              </button>
+
+              <button
+                className="cancel-clear"
+                onClick={handlePasswordCancel}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =======================
+          PRE-CONFIRM DIALOG
+      ======================== */}
       {showPreConfirmDialog && (
         <div className="dialog-overlay">
           <div className="dialog-box">
             <h3>Have you saved the data?</h3>
-
             <div className="dialog-buttons">
               <button
                 className="confirm-clear"
                 onClick={() => {
                   setShowPreConfirmDialog(false);
-
                   if (pendingAction === "clearCurrent") {
                     setShowClearDialog(true);
                   } else if (pendingAction === "clearHistory") {
                     setShowClearHistoryDialog(true);
                   }
-
                   setPendingAction(null);
                 }}
               >
@@ -456,12 +548,14 @@ function App() {
         </div>
       )}
 
-      {/* CLEAR CURRENT DATA DIALOG */}
+      {/* =======================
+          CLEAR CURRENT LOGS DIALOG
+      ======================== */}
       {showClearDialog && (
         <div className="dialog-overlay">
           <div className="dialog-box">
             <h3>Move Logs to History & Clear?</h3>
-            <p>This moves all completed logs to history and clears everything.</p>
+            <p>This moves all completed logs to history and clears current logs + live tasks.</p>
 
             <div className="dialog-buttons">
               <button
@@ -485,7 +579,9 @@ function App() {
         </div>
       )}
 
-      {/* CLEAR HISTORY DIALOG */}
+      {/* =======================
+          CLEAR HISTORY DIALOG
+      ======================== */}
       {showClearHistoryDialog && (
         <div className="dialog-overlay">
           <div className="dialog-box">
@@ -514,29 +610,32 @@ function App() {
         </div>
       )}
 
-      {/* MAIN TITLE + INPUT */}
+      {/* =======================
+          MAIN TITLE + INPUT
+      ======================== */}
       <div className={isCentered ? "center-screen" : "top-screen"}>
         <h1>Task Tracker</h1>
 
-        {!isAdmin && (
+        {!adminAuthenticated && (
           <>
             <input
               placeholder="Scan Employee ID"
               value={employeeId}
               onChange={(e) => {
                 const v = e.target.value.toLowerCase().trim();
-
                 if (!v) {
                   setEmployeeId("");
                   setInputError("");
+                  setIsAdminId(false);
                   return;
                 }
 
-                if (!employeeIdRegex.test(v)) {
+                if (!isEmployeeIdValidFormat(v)) {
                   setInputError(
                     "Invalid format. Use firstname.lastname or firstname.lastname2"
                   );
                   setEmployeeId(v);
+                  setIsAdminId(false);
                   return;
                 }
 
@@ -550,8 +649,10 @@ function App() {
         )}
       </div>
 
-      {/* ADMIN MODE */}
-      {isAdmin && (
+      {/* =======================
+          ADMIN MODE
+      ======================== */}
+      {adminAuthenticated && (
         <div className="admin-scroll">
           <div style={{ textAlign: "center" }}>
             <h2>ADMIN MODE ({employeeId})</h2>
@@ -729,8 +830,10 @@ function App() {
         </div>
       )}
 
-      {/* USER MODE (TASK BUTTONS) */}
-      {!isAdmin && employeeId && !inputError && (
+      {/* =======================
+          USER MODE (TASK BUTTONS)
+      ======================== */}
+      {!adminAuthenticated && canShowTaskButtons && (
         <div className="task-grid">
           {DEPARTMENT_ORDER.map((dep) => (
             <div key={dep} className="task-group">
