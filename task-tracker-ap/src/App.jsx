@@ -18,7 +18,7 @@ import "./App.css";
 // CONSTANTS
 // ===============================
 const ADMIN_IDS = ["ajaypal.sangha", "abin.thomas", "camilo.torres", "ishant.pruthi", "hardik.rana", "Sunny.Au-Yeung",
-                    ""];
+                    "arjaree.leenaungkoonruji"];
 
 const DEPARTMENT_ORDER = [
   "Others",
