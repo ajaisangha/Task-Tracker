@@ -28,7 +28,10 @@ const ADMIN_IDS = [
 ];
 
 const ADMIN_PASSWORD = "voila2026";
-const ADMIN_SALT = "Ajaipal"; // kept for reference if you ever hash later
+const ADMIN_SALT = "Ajaipal"; // for reference
+
+// MD5("voila2026Ajaipal") = 96682ce68e5a064a34db9283597a27d0
+// We just validate the plain password for this app.
 
 const DEPARTMENT_ORDER = [
   "Others",
@@ -99,21 +102,19 @@ function App() {
   const [currentTasks, setCurrentTasks] = useState({});
   const [taskLogs, setTaskLogs] = useState([]);
 
-  // Admin auth state
-  const [isAdminId, setIsAdminId] = useState(false); // whether ID is in ADMIN_IDS
+  // Admin state
+  const [isAdminId, setIsAdminId] = useState(false); // ID is in ADMIN_IDS
   const [adminAuthenticated, setAdminAuthenticated] = useState(false); // password OK
-
-  // Admin view toggles
   const [showLive, setShowLive] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
 
-  // Timer to force re-render for live durations
+  // Timer for live durations
   const [tick, setTick] = useState(0);
 
-  // Input / validation
+  // Input validation
   const [inputError, setInputError] = useState("");
 
-  // History range state
+  // History state
+  const [showHistory, setShowHistory] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [historyRows, setHistoryRows] = useState([]);
@@ -123,7 +124,7 @@ function App() {
   const [showClearDialog, setShowClearDialog] = useState(false);
   const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false);
 
-  // Pre-confirm dialog (Have you saved data?)
+  // Pre-confirm dialog state
   const [showPreConfirmDialog, setShowPreConfirmDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState(null); // "clearCurrent" | "clearHistory" | null
 
@@ -132,18 +133,18 @@ function App() {
   const [adminPassword, setAdminPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
 
-  // FILTER STATE (shared by live + history, AND-filtering)
-  const [filterEmployeeActive, setFilterEmployeeActive] = useState(false);
-  const [filterEmployeeValue, setFilterEmployeeValue] = useState("");
+  // FILTER STATE (shared between live + history, AND logic)
+  const [filterEmployeeIdEnabled, setFilterEmployeeIdEnabled] = useState(false);
+  const [filterEmployeeId, setFilterEmployeeId] = useState("");
 
-  const [filterTaskActive, setFilterTaskActive] = useState(false);
-  const [filterDepartment, setFilterDepartment] = useState("");
+  const [filterTaskEnabled, setFilterTaskEnabled] = useState(false);
+  const [filterTaskDept, setFilterTaskDept] = useState("");
   const [filterTaskName, setFilterTaskName] = useState("");
 
-  const [filterDateActive, setFilterDateActive] = useState(false);
+  const [filterDateEnabled, setFilterDateEnabled] = useState(false);
   const [filterDate, setFilterDate] = useState("");
 
-  const [filterDurationActive, setFilterDurationActive] = useState(false);
+  const [filterDurationEnabled, setFilterDurationEnabled] = useState(false);
   const [filterDurationMin, setFilterDurationMin] = useState("");
 
   const isCentered = !employeeId && !adminAuthenticated;
@@ -155,7 +156,7 @@ function App() {
     !adminAuthenticated &&
     !isAdminId &&
     !!employeeId &&
-    !inputError; // prevents invalid ID from selecting tasks
+    !inputError; // blocks invalid ID or admin IDs
 
   // ===============================
   // TIMER FOR LIVE DURATION
@@ -214,21 +215,6 @@ function App() {
     setEmployeeId("");
     setShowLive(false);
     setShowHistory(false);
-    setStartDate("");
-    setEndDate("");
-    setHistoryRows([]);
-    setHistoryLoaded(false);
-
-    // Reset filters
-    setFilterEmployeeActive(false);
-    setFilterEmployeeValue("");
-    setFilterTaskActive(false);
-    setFilterDepartment("");
-    setFilterTaskName("");
-    setFilterDateActive(false);
-    setFilterDate("");
-    setFilterDurationActive(false);
-    setFilterDurationMin("");
   };
 
   // ===============================
@@ -251,7 +237,7 @@ function App() {
   // HANDLE TASK CHANGE
   // ===============================
   const handleTaskChange = async (task, department) => {
-    // block if ID invalid or admin
+    // block if ID invalid or we are in admin mode
     if (!employeeId || inputError || isAdminId || adminAuthenticated) return;
 
     const id = employeeId.trim();
@@ -310,14 +296,16 @@ function App() {
     );
   };
 
-  const getDuration = (row) => {
+  const getDurationSecsLive = (row) => {
     const start = new Date(row.startTime);
     const end = row.endTime ? new Date(row.endTime) : new Date();
-    return durationFromSecs((end - start) / 1000);
+    return Math.max(0, Math.floor((end - start) / 1000));
   };
 
+  const getDuration = (row) => durationFromSecs(getDurationSecsLive(row));
+
   // ===============================
-  // MERGE HISTORY ROWS (same user + task + date)
+  // MERGE HISTORY ROWS
   // ===============================
   const mergeHistoryRows = (rows) => {
     const grouped = {};
@@ -337,69 +325,67 @@ function App() {
   // ===============================
   // FILTER HELPERS (AND logic)
   // ===============================
-  const passesCommonFilters = (row, getRowDate, getRowDurationSecs, getRowDept, getRowTask) => {
-    // Employee filter
-    if (filterEmployeeActive && filterEmployeeValue.trim()) {
-      const needle = filterEmployeeValue.trim().toLowerCase();
-      if (!String(row.employeeId || "").toLowerCase().includes(needle)) {
-        return false;
+  const applyLiveFilters = (rows) => {
+    return rows.filter((t) => {
+      // Employee ID filter
+      if (filterEmployeeIdEnabled) {
+        const term = filterEmployeeId.trim().toLowerCase();
+        if (!term || !t.employeeId?.toLowerCase().includes(term)) return false;
       }
-    }
 
-    // Task / Department filter
-    if (filterTaskActive) {
-      const dept = getRowDept(row);
-      const task = getRowTask(row);
-
-      if (filterDepartment && dept !== filterDepartment) return false;
-      if (filterTaskName && task !== filterTaskName) return false;
-    }
-
-    // Date filter (exact date)
-    if (filterDateActive && filterDate) {
-      const rowDate = getRowDate(row);
-      if (rowDate !== filterDate) return false;
-    }
-
-    // Duration filter (min minutes)
-    if (filterDurationActive && filterDurationMin) {
-      const mins = Number(filterDurationMin);
-      if (!Number.isNaN(mins) && mins > 0) {
-        const secs = getRowDurationSecs(row);
-        const rowMins = secs / 60;
-        if (rowMins < mins) return false;
+      // Task + Department filter
+      if (filterTaskEnabled) {
+        if (filterTaskDept && t.department !== filterTaskDept) return false;
+        if (filterTaskName && t.task !== filterTaskName) return false;
       }
-    }
 
-    return true;
+      // Date filter (exact date)
+      if (filterDateEnabled && filterDate) {
+        const dateStr =
+          typeof t.startTime === "string"
+            ? t.startTime.slice(0, 10)
+            : new Date(t.startTime).toISOString().slice(0, 10);
+        if (dateStr !== filterDate) return false;
+      }
+
+      // Duration filter (minutes)
+      if (filterDurationEnabled && filterDurationMin) {
+        const secs = getDurationSecsLive(t);
+        const mins = secs / 60;
+        if (mins < Number(filterDurationMin)) return false;
+      }
+
+      return true;
+    });
   };
 
-  const applyFiltersToLiveRows = (rows) => {
-    return rows.filter((row) =>
-      passesCommonFilters(
-        row,
-        (r) => (r.startTime || "").slice(0, 10),
-        (r) => {
-          const start = new Date(r.startTime);
-          const end = new Date();
-          return Math.max(0, (end - start) / 1000);
-        },
-        (r) => r.department,
-        (r) => r.task
-      )
-    );
-  };
+  const applyHistoryFilters = (rows) => {
+    return rows.filter((r) => {
+      // Employee ID
+      if (filterEmployeeIdEnabled) {
+        const term = filterEmployeeId.trim().toLowerCase();
+        if (!term || !r.employeeId?.toLowerCase().includes(term)) return false;
+      }
 
-  const applyFiltersToHistoryRows = (rows) => {
-    return rows.filter((row) =>
-      passesCommonFilters(
-        row,
-        (r) => r.date,
-        (r) => Number(r.durationSecs) || 0,
-        (r) => r.department,
-        (r) => r.task
-      )
-    );
+      // Task + Department
+      if (filterTaskEnabled) {
+        if (filterTaskDept && r.department !== filterTaskDept) return false;
+        if (filterTaskName && r.task !== filterTaskName) return false;
+      }
+
+      // Date
+      if (filterDateEnabled && filterDate) {
+        if (r.date !== filterDate) return false;
+      }
+
+      // Duration (minutes)
+      if (filterDurationEnabled && filterDurationMin) {
+        const mins = (Number(r.durationSecs) || 0) / 60;
+        if (mins < Number(filterDurationMin)) return false;
+      }
+
+      return true;
+    });
   };
 
   // ===============================
@@ -459,15 +445,13 @@ function App() {
   };
 
   // ===============================
-  // EXPORT HISTORY CSV (merged)
+  // EXPORT HISTORY CSV
   // ===============================
   const exportWeeklyCSV = () => {
     if (!historyRows.length) return;
 
-    const filtered = applyFiltersToHistoryRows(historyRows);
-
     const grouped = {};
-    filtered.forEach((r) => {
+    historyRows.forEach((r) => {
       if (!grouped[r.employeeId]) grouped[r.employeeId] = [];
       grouped[r.employeeId].push(r);
     });
@@ -563,150 +547,19 @@ function App() {
   };
 
   // ===============================
-  // FILTER CONTROLS RENDER
-  // (used in live + history)
+  // DERIVED FILTERED DATA
   // ===============================
-  const renderFilterControls = () => (
-    <div className="filter-controls">
-      {/* Employee filter */}
-      <label>
-        <span>
-          <input
-            type="checkbox"
-            checked={filterEmployeeActive}
-            onChange={(e) => setFilterEmployeeActive(e.target.checked)}
-            style={{ marginRight: "4px" }}
-          />
-          Employee ID
-        </span>
-        {filterEmployeeActive && (
-          <input
-            type="text"
-            placeholder="e.g. ajaypal.sangha"
-            value={filterEmployeeValue}
-            onChange={(e) => setFilterEmployeeValue(e.target.value)}
-          />
-        )}
-      </label>
-
-      {/* Task filter (with Department + Task dropdowns) */}
-      <label>
-        <span>
-          <input
-            type="checkbox"
-            checked={filterTaskActive}
-            onChange={(e) => {
-              const checked = e.target.checked;
-              setFilterTaskActive(checked);
-              if (!checked) {
-                setFilterDepartment("");
-                setFilterTaskName("");
-              }
-            }}
-            style={{ marginRight: "4px" }}
-          />
-          Task
-        </span>
-
-        {filterTaskActive && (
-          <>
-            {/* Department dropdown */}
-            <select
-              value={filterDepartment}
-              onChange={(e) => {
-                setFilterDepartment(e.target.value);
-                setFilterTaskName("");
-              }}
-            >
-              <option value="">All Departments</option>
-              {Object.keys(DEPARTMENTS).map((dep) => (
-                <option key={dep} value={dep}>
-                  {dep}
-                </option>
-              ))}
-            </select>
-
-            {/* Task dropdown (based on department) */}
-            {filterDepartment && (
-              <select
-                value={filterTaskName}
-                onChange={(e) => setFilterTaskName(e.target.value)}
-              >
-                <option value="">All Tasks</option>
-                {DEPARTMENTS[filterDepartment].map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            )}
-          </>
-        )}
-      </label>
-
-      {/* Date filter (exact date) */}
-      <label>
-        <span>
-          <input
-            type="checkbox"
-            checked={filterDateActive}
-            onChange={(e) => {
-              const checked = e.target.checked;
-              setFilterDateActive(checked);
-              if (!checked) setFilterDate("");
-            }}
-            style={{ marginRight: "4px" }}
-          />
-          Date
-        </span>
-        {filterDateActive && (
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-          />
-        )}
-      </label>
-
-      {/* Duration filter (min minutes) */}
-      <label>
-        <span>
-          <input
-            type="checkbox"
-            checked={filterDurationActive}
-            onChange={(e) => {
-              const checked = e.target.checked;
-              setFilterDurationActive(checked);
-              if (!checked) setFilterDurationMin("");
-            }}
-            style={{ marginRight: "4px" }}
-          />
-          Min Duration (min)
-        </span>
-        {filterDurationActive && (
-          <input
-            type="number"
-            min="0"
-            step="1"
-            value={filterDurationMin}
-            onChange={(e) => setFilterDurationMin(e.target.value)}
-          />
-        )}
-      </label>
-    </div>
-  );
+  const liveRowsFiltered = applyLiveFilters(Object.values(currentTasks || {}));
+  const historyRowsFiltered = applyHistoryFilters(historyRows || []);
 
   // ===============================
   // RENDER
   // ===============================
-  const liveRowsFiltered = applyFiltersToLiveRows(
-    Object.values(currentTasks)
-  );
-  const historyRowsFiltered = applyFiltersToHistoryRows(historyRows);
-
   return (
     <div id="root">
-      {/* ADMIN PASSWORD DIALOG */}
+      {/* =======================
+          ADMIN PASSWORD DIALOG
+      ======================== */}
       {showPasswordDialog && (
         <div className="dialog-overlay">
           <div className="dialog-box">
@@ -728,7 +581,10 @@ function App() {
             />
 
             {passwordError && (
-              <div className="input-error" style={{ marginBottom: "0.5rem" }}>
+              <div
+                className="input-error"
+                style={{ marginBottom: "0.5rem" }}
+              >
                 {passwordError}
               </div>
             )}
@@ -737,6 +593,7 @@ function App() {
               <button className="confirm-clear" onClick={handlePasswordSubmit}>
                 Login
               </button>
+
               <button className="cancel-clear" onClick={handlePasswordCancel}>
                 Cancel
               </button>
@@ -745,7 +602,9 @@ function App() {
         </div>
       )}
 
-      {/* PRE-CONFIRM "Have you saved data?" DIALOG */}
+      {/* =======================
+          PRE-CONFIRM DIALOG
+      ======================== */}
       {showPreConfirmDialog && (
         <div className="dialog-overlay">
           <div className="dialog-box">
@@ -780,7 +639,9 @@ function App() {
         </div>
       )}
 
-      {/* CLEAR CURRENT LOGS DIALOG */}
+      {/* =======================
+          CLEAR CURRENT LOGS DIALOG
+      ======================== */}
       {showClearDialog && (
         <div className="dialog-overlay">
           <div className="dialog-box">
@@ -812,7 +673,9 @@ function App() {
         </div>
       )}
 
-      {/* CLEAR HISTORY DIALOG */}
+      {/* =======================
+          CLEAR HISTORY DIALOG
+      ======================== */}
       {showClearHistoryDialog && (
         <div className="dialog-overlay">
           <div className="dialog-box">
@@ -841,7 +704,9 @@ function App() {
         </div>
       )}
 
-      {/* MAIN TITLE + INPUT */}
+      {/* =======================
+          MAIN TITLE + INPUT
+      ======================== */}
       <div className={isCentered ? "center-screen" : "top-screen"}>
         <h1>Task Tracker</h1>
 
@@ -878,7 +743,9 @@ function App() {
         )}
       </div>
 
-      {/* ADMIN MODE */}
+      {/* =======================
+          ADMIN MODE
+      ======================== */}
       {adminAuthenticated && (
         <div className="admin-scroll">
           <div style={{ textAlign: "center" }}>
@@ -921,11 +788,180 @@ function App() {
             </div>
           </div>
 
-          {/* LIVE VIEW */}
+          {/* =======================
+              LIVE VIEW
+          ======================== */}
           {showLive && (
             <>
-              {/* FILTER ROW (live view) */}
-              {renderFilterControls()}
+              {/* FILTERS (LIVE) */}
+              <div
+                className="history-controls"
+                style={{ marginTop: "12px" }}
+              >
+                {/* Employee ID filter */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filterEmployeeIdEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFilterEmployeeIdEnabled(checked);
+                        if (!checked) setFilterEmployeeId("");
+                      }}
+                    />
+                    <span>Employee ID</span>
+                  </label>
+                  {filterEmployeeIdEnabled && (
+                    <input
+                      style={{ marginTop: "4px" }}
+                      type="text"
+                      value={filterEmployeeId}
+                      onChange={(e) => setFilterEmployeeId(e.target.value)}
+                      placeholder="Search employee"
+                    />
+                  )}
+                </div>
+
+                {/* Task + Dept filter */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filterTaskEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFilterTaskEnabled(checked);
+                        if (!checked) {
+                          setFilterTaskDept("");
+                          setFilterTaskName("");
+                        }
+                      }}
+                    />
+                    <span>Task</span>
+                  </label>
+
+                  {filterTaskEnabled && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        marginTop: "4px",
+                        gap: "4px",
+                      }}
+                    >
+                      {/* Department select */}
+                      <select
+                        value={filterTaskDept}
+                        onChange={(e) => {
+                          setFilterTaskDept(e.target.value);
+                          setFilterTaskName("");
+                        }}
+                      >
+                        <option value="">All Departments</option>
+                        {DEPARTMENT_ORDER.map((dep) => (
+                          <option key={dep} value={dep}>
+                            {dep}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Task select (depends on department) */}
+                      <select
+                        value={filterTaskName}
+                        onChange={(e) => setFilterTaskName(e.target.value)}
+                        disabled={!filterTaskDept}
+                      >
+                        <option value="">
+                          {filterTaskDept
+                            ? "All Tasks"
+                            : "Select department first"}
+                        </option>
+                        {filterTaskDept &&
+                          (DEPARTMENTS[filterTaskDept] || []).map((task) => (
+                            <option key={task} value={task}>
+                              {task}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Date (exact) filter */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filterDateEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFilterDateEnabled(checked);
+                        if (!checked) setFilterDate("");
+                      }}
+                    />
+                    <span>Date</span>
+                  </label>
+                  {filterDateEnabled && (
+                    <input
+                      style={{ marginTop: "4px" }}
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                    />
+                  )}
+                </div>
+
+                {/* Duration (minutes) filter */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filterDurationEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFilterDurationEnabled(checked);
+                        if (!checked) setFilterDurationMin("");
+                      }}
+                    />
+                    <span>Duration ≥ (min)</span>
+                  </label>
+                  {filterDurationEnabled && (
+                    <input
+                      style={{ marginTop: "4px" }}
+                      type="number"
+                      min="0"
+                      value={filterDurationMin}
+                      onChange={(e) => setFilterDurationMin(e.target.value)}
+                      placeholder="Minutes"
+                    />
+                  )}
+                </div>
+              </div>
 
               {/* LIVE TABLE */}
               <div className="live-container">
@@ -955,14 +991,16 @@ function App() {
             </>
           )}
 
-          {/* HISTORY VIEW */}
+          {/* =======================
+              HISTORY VIEW
+          ======================== */}
           {showHistory && (
             <div className="history-container">
               <h2 style={{ textAlign: "center", marginBottom: "8px" }}>
                 History (Date Range)
               </h2>
 
-              {/* DATE RANGE ROW */}
+              {/* DATE RANGE CONTROLS */}
               <div className="history-controls">
                 <label>
                   Start:
@@ -977,7 +1015,7 @@ function App() {
                   />
                 </label>
 
-                <label>
+                <label style={{ marginLeft: "20px" }}>
                   End:
                   <input
                     type="date"
@@ -1017,10 +1055,175 @@ function App() {
                 </button>
               </div>
 
-              {/* FILTER ROW (history view) */}
-              {renderFilterControls()}
+              {/* FILTERS (HISTORY) */}
+              <div
+                className="history-controls"
+                style={{ marginTop: "4px" }}
+              >
+                {/* Employee ID filter */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filterEmployeeIdEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFilterEmployeeIdEnabled(checked);
+                        if (!checked) setFilterEmployeeId("");
+                      }}
+                    />
+                    <span>Employee ID</span>
+                  </label>
+                  {filterEmployeeIdEnabled && (
+                    <input
+                      style={{ marginTop: "4px" }}
+                      type="text"
+                      value={filterEmployeeId}
+                      onChange={(e) => setFilterEmployeeId(e.target.value)}
+                      placeholder="Search employee"
+                    />
+                  )}
+                </div>
 
-              {/* HISTORY RESULTS */}
+                {/* Task + Dept filter */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filterTaskEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFilterTaskEnabled(checked);
+                        if (!checked) {
+                          setFilterTaskDept("");
+                          setFilterTaskName("");
+                        }
+                      }}
+                    />
+                    <span>Task</span>
+                  </label>
+
+                  {filterTaskEnabled && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        marginTop: "4px",
+                        gap: "4px",
+                      }}
+                    >
+                      <select
+                        value={filterTaskDept}
+                        onChange={(e) => {
+                          setFilterTaskDept(e.target.value);
+                          setFilterTaskName("");
+                        }}
+                      >
+                        <option value="">All Departments</option>
+                        {DEPARTMENT_ORDER.map((dep) => (
+                          <option key={dep} value={dep}>
+                            {dep}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={filterTaskName}
+                        onChange={(e) => setFilterTaskName(e.target.value)}
+                        disabled={!filterTaskDept}
+                      >
+                        <option value="">
+                          {filterTaskDept
+                            ? "All Tasks"
+                            : "Select department first"}
+                        </option>
+                        {filterTaskDept &&
+                          (DEPARTMENTS[filterTaskDept] || []).map((task) => (
+                            <option key={task} value={task}>
+                              {task}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Date filter (exact date inside range) */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filterDateEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFilterDateEnabled(checked);
+                        if (!checked) setFilterDate("");
+                      }}
+                    />
+                    <span>Date</span>
+                  </label>
+                  {filterDateEnabled && (
+                    <input
+                      style={{ marginTop: "4px" }}
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                    />
+                  )}
+                </div>
+
+                {/* Duration filter */}
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={filterDurationEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setFilterDurationEnabled(checked);
+                        if (!checked) setFilterDurationMin("");
+                      }}
+                    />
+                    <span>Duration ≥ (min)</span>
+                  </label>
+                  {filterDurationEnabled && (
+                    <input
+                      style={{ marginTop: "4px" }}
+                      type="number"
+                      min="0"
+                      value={filterDurationMin}
+                      onChange={(e) => setFilterDurationMin(e.target.value)}
+                      placeholder="Minutes"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* RESULTS */}
               <div className="history-output">
                 {historyLoaded && historyRowsFiltered.length === 0 && (
                   <p>No records found.</p>
@@ -1068,7 +1271,9 @@ function App() {
         </div>
       )}
 
-      {/* USER MODE (TASK BUTTONS) */}
+      {/* =======================
+          USER MODE (TASK BUTTONS)
+      ======================== */}
       {!adminAuthenticated && canShowTaskButtons && (
         <div className="task-grid">
           {DEPARTMENT_ORDER.map((dep) => (
@@ -1076,7 +1281,10 @@ function App() {
               <h3>{dep}</h3>
               <div className="task-buttons">
                 {DEPARTMENTS[dep].map((task) => (
-                  <button key={task} onClick={() => handleTaskChange(task, dep)}>
+                  <button
+                    key={task}
+                    onClick={() => handleTaskChange(task, dep)}
+                  >
                     {task}
                   </button>
                 ))}

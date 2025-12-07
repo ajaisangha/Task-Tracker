@@ -380,19 +380,39 @@ table tr:nth-child(even) td {
   gap: 0.3rem;        /* space between label text & input */
 }
 
-/* FILTER CONTROLS (for live + history) */
+/* FILTER CONTROLS (Live + History) */
 .filter-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.8rem;
+  gap: 1rem;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 1rem;
 }
 
-.filter-controls label {
+.filter-option {
   display: flex;
-  flex-direction: column;
+  flex-direction: column;   /* input appears on next line */
+  align-items: flex-start;
+}
+
+/* Row containing checkbox + label text */
+.filter-option-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;   /* smaller spacing */
   font-weight: 500;
-  gap: 0.3rem;
+}
+
+/* Input field spacing (appears below text, not under checkbox) */
+.filter-option input[type="text"],
+.filter-option input[type="date"],
+.filter-option input[type="number"],
+.filter-option select {
+  margin-top: 6px;  /* spacing under label text */
+  margin-left: 22px;  /* aligns under label text, not checkbox */
+  padding: 6px;
+  border-radius: 5px;
+  border: 1px solid var(--border-color);
+  width: 160px;
 }
