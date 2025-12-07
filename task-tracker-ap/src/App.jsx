@@ -149,6 +149,15 @@ function App() {
 
   const isCentered = !employeeId && !adminAuthenticated;
 
+  // ===============================
+  // ADMIN BULK TASK UPDATE STATE
+  // ===============================
+  const [selectedEmployees, setSelectedEmployees] = useState([]);
+  const [adminUpdateDept, setAdminUpdateDept] = useState("");
+  const [adminUpdateTask, setAdminUpdateTask] = useState("");
+
+
+
   const isEmployeeIdValidFormat = (id) =>
     /^[a-z]+(?:\.[a-z]+)(?:\d+)?$/.test(id);
 
@@ -231,6 +240,49 @@ function App() {
     if (!isValidCompletedRow(row)) return;
     await addDoc(collection(db, "taskLogs"), row);
     setTaskLogs((p) => [...p, row]);
+  };
+
+  const toggleSelectedEmployee = (id) => {
+    setSelectedEmployees((prev) =>
+      prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id]
+    );
+  };
+
+  const adminUpdateTaskForSelected = async () => {
+    if (!selectedEmployees.length) return alert("No employees selected!");
+    if (!adminUpdateDept || !adminUpdateTask)
+      return alert("Select both department and task!");
+
+    const now = new Date().toISOString();
+
+    for (const id of selectedEmployees) {
+      const old = currentTasks[id];
+
+      // close old task if exists
+      if (old) {
+        await saveCompletedTask({
+          employeeId: id,
+          task: old.task,
+          department: old.department,
+          startTime: old.startTime,
+          endTime: now,
+        });
+      }
+
+      // set new task
+      await setDoc(doc(db, "activeTasks", id), {
+        employeeId: id,
+        task: adminUpdateTask,
+        department: adminUpdateDept,
+        startTime: now,
+        endTime: null,
+      });
+    }
+
+    alert("Task updated successfully!");
+    setSelectedEmployees([]);
   };
 
   // ===============================
@@ -979,11 +1031,101 @@ const applyHistoryFilters = (rows) => {
                 </div>
               </div>
 
-              {/* LIVE TABLE */}
-              <div className="live-container">
+              {/* ADMIN BULK TASK UPDATE PANEL — NOW ABOVE THE TABLE */}
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "12px",
+                  border: "1px solid #ccc",
+                  borderRadius: "8px",
+                  background: "#f9f9f9",
+                  maxWidth: "600px",
+                  marginLeft: "auto",
+                  marginRight: "auto",
+                  textAlign: "center",
+                }}
+              >
+                <h3>Update Task for Selected Employees</h3>
+
+                {/* Department Dropdown */}
+                <div style={{ marginTop: "8px" }}>
+                  <label>Department:&nbsp;</label>
+                  <select
+                    value={adminUpdateDept}
+                    onChange={(e) => {
+                      setAdminUpdateDept(e.target.value);
+                      setAdminUpdateTask("");
+                    }}
+                  >
+                    <option value="">Select department</option>
+                    {DEPARTMENT_ORDER.map((dep) => (
+                      <option key={dep} value={dep}>
+                        {dep}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Task Dropdown (depends on department) */}
+                {adminUpdateDept && (
+                  <div style={{ marginTop: "8px" }}>
+                    <label>Task:&nbsp;</label>
+                    <select
+                      value={adminUpdateTask}
+                      onChange={(e) => setAdminUpdateTask(e.target.value)}
+                    >
+                      <option value="">Select task</option>
+                      {DEPARTMENTS[adminUpdateDept].map((task) => (
+                        <option key={task} value={task}>
+                          {task}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Button */}
+                <button
+                  style={{ marginTop: "12px", padding: "8px 16px" }}
+                  onClick={adminUpdateTaskForSelected}
+                  disabled={!selectedEmployees.length}
+                >
+                  Update Task for Selected ({selectedEmployees.length})
+                </button>
+              </div>
+
+              {/* LIVE TABLE BELOW THE PANEL */}
+              <div className="live-container" style={{ marginTop: "20px" }}>
                 <table>
                   <thead>
                     <tr>
+                      <th
+                        style={{
+                          width: "1%",
+                          whiteSpace: "nowrap",
+                          textAlign: "center",
+                          padding: "0",
+                        }}
+                      >
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          <span>Select All</span>
+                          <input
+                            type="checkbox"
+                            checked={
+                              liveRowsFiltered.length > 0 &&
+                              selectedEmployees.length === liveRowsFiltered.length
+                            }
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedEmployees(liveRowsFiltered.map((r) => r.employeeId));
+                              } else {
+                                setSelectedEmployees([]);
+                              }
+                            }}
+                          />
+                        </div>
+                      </th>
+
                       <th>Employee</th>
                       <th>Task</th>
                       <th>Department</th>
@@ -991,9 +1133,17 @@ const applyHistoryFilters = (rows) => {
                       <th>Duration</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {liveRowsFiltered.map((t, i) => (
                       <tr key={i}>
+                        <td style={{ width: "1%", textAlign: "center", padding: "0" }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedEmployees.includes(t.employeeId)}
+                            onChange={() => toggleSelectedEmployee(t.employeeId)}
+                          />
+                        </td>
                         <td>{t.employeeId}</td>
                         <td>{t.task}</td>
                         <td>{t.department}</td>
@@ -1004,6 +1154,7 @@ const applyHistoryFilters = (rows) => {
                   </tbody>
                 </table>
               </div>
+
             </>
           )}
 
