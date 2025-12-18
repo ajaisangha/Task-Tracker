@@ -97,13 +97,10 @@ export default function App() {
   };
 
   /* ================= RENDER ================= */
-  if (page === "admin") {
-    return <Admin onLogout={() => setPage("main")} />;
-  }
-
-  if (page === "admin") {
+if (page === "admin") {
   return <Admin onExit={() => setPage("main")} />;
 }
+
 
   return (
     <div id="root">
