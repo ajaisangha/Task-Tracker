@@ -101,12 +101,17 @@ export default function App() {
     return <Admin onLogout={() => setPage("main")} />;
   }
 
+  if (page === "admin") {
+  return <Admin onExit={() => setPage("main")} />;
+}
+
   return (
     <div id="root">
       {/* TOP BAR */}
       <div style={{ position: "absolute", top: 12, right: 12 }}>
         <button onClick={() => setPage("admin")}>Admin</button>
       </div>
+
 
       <div className={!employeeId ? "center-screen" : "top-screen"}>
         <h1>Task Tracker</h1>
