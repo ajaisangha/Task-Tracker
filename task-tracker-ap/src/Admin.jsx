@@ -13,6 +13,9 @@ import {
 } from "firebase/firestore";
 import "./admin.css";
 
+/* ===============================
+   CONSTANTS
+================================ */
 const DEPARTMENT_ORDER = [
   "Others",
   "Tote Wash",
@@ -27,12 +30,7 @@ const DEPARTMENT_ORDER = [
 const DEPARTMENTS = {
   Others: ["Shift End", "Washroom", "Break", "Move To Another Department"],
   "Tote Wash": ["Tote Wash", "Tote Wash Cleanup", "Move Pallets"],
-  Pick: [
-    "Ambient Picking",
-    "Ambient Pick Cleanup",
-    "Chill Picking",
-    "Chill Pick Cleanup",
-  ],
+  Pick: ["Ambient Picking", "Ambient Pick Cleanup", "Chill Picking", "Chill Pick Cleanup"],
   Bagging: ["Bagging", "Bagging Runner", "Bagging Cleanup"],
   Decant: [
     "MHE",
@@ -72,34 +70,34 @@ const DEPARTMENTS = {
 };
 
 export default function Admin({ onExit }) {
-  /* AUTH */
+  /* ================= AUTH ================= */
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
 
-  /* VIEW */
+  /* ================= VIEW ================= */
   const [view, setView] = useState("live");
 
-  /* LIVE DATA */
+  /* ================= LIVE DATA ================= */
   const [activeTasks, setActiveTasks] = useState([]);
-  const [tick, setTick] = useState(0);
+  const [, forceTick] = useState(0);
 
-  /* FILTERS */
+  /* ================= FILTERS ================= */
   const [fEmp, setFEmp] = useState("");
   const [fDept, setFDept] = useState("");
   const [fTask, setFTask] = useState("");
   const [fDate, setFDate] = useState("");
   const [fMin, setFMin] = useState("");
 
-  /* SELECTION */
+  /* ================= SELECTION ================= */
   const [selected, setSelected] = useState([]);
 
-  /* BULK */
+  /* ================= BULK ================= */
   const [bulkDept, setBulkDept] = useState("");
   const [bulkTask, setBulkTask] = useState("");
 
-  /* LOGIN */
+  /* ================= LOGIN ================= */
   const login = async () => {
     setError("");
     try {
@@ -118,38 +116,44 @@ export default function Admin({ onExit }) {
     onExit();
   };
 
-  /* LIVE SUBSCRIBE */
+  /* ================= LIVE SUBSCRIBE ================= */
   useEffect(() => {
     if (!loggedIn) return;
+
     return onSnapshot(collection(db, "activeTasks"), (snap) => {
       const rows = [];
-      snap.forEach((d) => rows.push(d.data()));
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data.task !== "Shift End") {
+          rows.push(data);
+        }
+      });
       setActiveTasks(rows);
     });
   }, [loggedIn]);
 
-  /* TIMER */
+  /* ================= TIMER ================= */
   useEffect(() => {
-    const i = setInterval(() => setTick((t) => t + 1), 1000);
+    const i = setInterval(() => forceTick((t) => t + 1), 1000);
     return () => clearInterval(i);
   }, []);
 
-  /* HELPERS */
+  /* ================= HELPERS ================= */
   const durationSecs = (r) =>
-    Math.floor((Date.now() - new Date(r.startTime)) / 1000);
+    Math.max(0, Math.floor((Date.now() - new Date(r.startTime)) / 1000));
 
   const fmt = (s) =>
     `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(
       Math.floor((s % 3600) / 60)
     ).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
-  const parseTerms = (t) => t.toLowerCase().split(/[\s,]+/).filter(Boolean);
+  const parseTerms = (t) =>
+    t.toLowerCase().split(/[\s,]+/).filter(Boolean);
 
   const filtered = activeTasks.filter((r) => {
     if (fEmp) {
       const terms = parseTerms(fEmp);
-      if (!terms.some((t) => r.employeeId.toLowerCase().includes(t)))
-        return false;
+      if (!terms.some((t) => r.employeeId.toLowerCase().includes(t))) return false;
     }
     if (fDept && r.department !== fDept) return false;
     if (fTask && r.task !== fTask) return false;
@@ -161,7 +165,7 @@ export default function Admin({ onExit }) {
   const allSelected =
     filtered.length > 0 && selected.length === filtered.length;
 
-  /* BULK UPDATE */
+  /* ================= BULK UPDATE ================= */
   const bulkUpdate = async () => {
     if (!selected.length || !bulkDept || !bulkTask) return;
 
@@ -169,12 +173,13 @@ export default function Admin({ onExit }) {
 
     for (const emp of selected) {
       const old = activeTasks.find((r) => r.employeeId === emp);
-      if (old) {
-        await addDoc(collection(db, "taskLogs"), {
-          ...old,
-          endTime: now,
-        });
-      }
+      if (!old) continue;
+
+      await addDoc(collection(db, "taskLogs"), {
+        ...old,
+        endTime: now,
+      });
+
       await setDoc(doc(db, "activeTasks", emp), {
         employeeId: emp,
         task: bulkTask,
@@ -189,83 +194,76 @@ export default function Admin({ onExit }) {
     setBulkTask("");
   };
 
-  /* CSV */
+  /* ================= CSV EXPORT ================= */
   const exportCSV = async () => {
     const snap = await getDocs(
       query(collection(db, "taskLogs"), orderBy("startTime"))
     );
-    const rows = snap.docs.map((d) => d.data());
 
+    const rows = snap.docs
+      .map((d) => d.data())
+      .filter((r) => r.task !== "Shift End");
+
+    // group employee → date → task
     let csv = "employee,task,department,date,duration\n";
-    rows.forEach((r) => {
-      csv += `${r.employeeId},${r.task},${r.department},${r.startTime.slice(
-        0,
-        10
-      )},${fmt((new Date(r.endTime) - new Date(r.startTime)) / 1000)}\n`;
-    });
+
+    rows
+      .sort(
+        (a, b) =>
+          a.employeeId.localeCompare(b.employeeId) ||
+          a.startTime.localeCompare(b.startTime)
+      )
+      .forEach((r) => {
+        const dur =
+          (new Date(r.endTime) - new Date(r.startTime)) / 1000;
+        csv += `${r.employeeId},${r.task},${r.department},${r.startTime.slice(
+          0,
+          10
+        )},${fmt(dur)}\n`;
+      });
 
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = "current-tasks.csv";
+    a.download = "task-report.csv";
     a.click();
   };
 
-  /* LOGIN UI */
+  /* ================= LOGIN UI ================= */
   if (!loggedIn) {
     return (
       <div className="admin-overlay">
         <div className="admin-dialog">
           <h3>Admin Login</h3>
 
-          <input
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
 
           {error && <div className="admin-error">{error}</div>}
 
           <div className="admin-dialog-buttons">
             <button onClick={login}>Login</button>
-            <button className="secondary" onClick={onExit}>
-              Back
-            </button>
+            <button className="secondary" onClick={onExit}>Back</button>
           </div>
         </div>
       </div>
     );
   }
 
-  /* ADMIN PAGE */
+  /* ================= ADMIN PAGE ================= */
   return (
     <div className="admin-page">
       <div className="admin-topbar">
         <div />
         <h2 className="admin-title">Task Tracker</h2>
-        <button className="logout-btn" onClick={logout}>
-          Logout
-        </button>
+        <button className="logout-btn" onClick={logout}>Logout</button>
       </div>
 
       <div className="admin-toggle">
-        <button
-          className={view === "live" ? "active" : ""}
-          onClick={() => setView("live")}
-        >
+        <button className={view === "live" ? "active" : ""} onClick={() => setView("live")}>
           Live View
         </button>
-        <button
-          className={view === "history" ? "active" : ""}
-          onClick={() => setView("history")}
-        >
+        <button className={view === "history" ? "active" : ""} onClick={() => setView("history")}>
           History View
         </button>
       </div>
@@ -273,79 +271,45 @@ export default function Admin({ onExit }) {
       {view === "live" && (
         <>
           <div className="history-controls">
+            <button onClick={exportCSV}>Download CSV</button>
             <div className="filter-text">Filters</div>
-            <input
-              placeholder="Employee(s)"
-              value={fEmp}
-              onChange={(e) => setFEmp(e.target.value)}
-            />
+            <input placeholder="Employee(s)" value={fEmp} onChange={(e) => setFEmp(e.target.value)} />
             <select value={fDept} onChange={(e) => setFDept(e.target.value)}>
               <option value="">All Depts</option>
-              {DEPARTMENT_ORDER.map((d) => (
-                <option key={d}>{d}</option>
-              ))}
+              {DEPARTMENT_ORDER.map((d) => <option key={d}>{d}</option>)}
             </select>
-            <select
-              value={fTask}
-              onChange={(e) => setFTask(e.target.value)}
-              disabled={!fDept}
-            >
+            <select value={fTask} onChange={(e) => setFTask(e.target.value)} disabled={!fDept}>
               <option value="">All Tasks</option>
-              {fDept &&
-                DEPARTMENTS[fDept].map((t) => <option key={t}>{t}</option>)}
+              {fDept && DEPARTMENTS[fDept].map((t) => <option key={t}>{t}</option>)}
             </select>
-            <input
-              type="date"
-              value={fDate}
-              onChange={(e) => setFDate(e.target.value)}
-            />
-            <input
-              type="number"
-              placeholder="Min"
-              value={fMin}
-              onChange={(e) => setFMin(e.target.value)}
-            />
+            <input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)} />
+            <input type="number" placeholder="Min" value={fMin} onChange={(e) => setFMin(e.target.value)} />
           </div>
 
           {selected.length > 0 && (
             <div className="admin-actions">
-              <select
-                value={bulkDept}
-                onChange={(e) => setBulkDept(e.target.value)}
-              >
+              <select value={bulkDept} onChange={(e) => setBulkDept(e.target.value)}>
                 <option value="">Dept</option>
-                {DEPARTMENT_ORDER.map((d) => (
-                  <option key={d}>{d}</option>
-                ))}
+                {DEPARTMENT_ORDER.map((d) => <option key={d}>{d}</option>)}
               </select>
-              <select
-                value={bulkTask}
-                onChange={(e) => setBulkTask(e.target.value)}
-                disabled={!bulkDept}
-              >
+              <select value={bulkTask} onChange={(e) => setBulkTask(e.target.value)} disabled={!bulkDept}>
                 <option value="">Task</option>
-                {bulkDept &&
-                  DEPARTMENTS[bulkDept].map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
+                {bulkDept && DEPARTMENTS[bulkDept].map((t) => <option key={t}>{t}</option>)}
               </select>
               <button onClick={bulkUpdate}>Update Selected</button>
-              <button onClick={exportCSV}>Download CSV</button>
             </div>
           )}
 
           <table>
             <thead>
               <tr>
-                <th className="select-all-th">
+                <th>
                   <label className="select-all-wrap">
                     <input
                       type="checkbox"
                       checked={allSelected}
                       onChange={(e) =>
-                        setSelected(
-                          e.target.checked ? filtered.map((r) => r.employeeId) : []
-                        )
+                        setSelected(e.target.checked ? filtered.map((r) => r.employeeId) : [])
                       }
                     />
                     <span>Select All</span>
@@ -362,7 +326,7 @@ export default function Admin({ onExit }) {
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.employeeId}>
-                  <td className="select-col">
+                  <td>
                     <input
                       type="checkbox"
                       checked={selected.includes(r.employeeId)}
