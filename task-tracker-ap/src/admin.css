@@ -137,6 +137,7 @@
   border-radius: 6px;
 }
 
+/* TABLE */
 table {
   width: 100%;
   max-width: 1100px;
@@ -157,4 +158,35 @@ th {
 
 tbody tr:nth-child(even) {
   background: #fafafa;
+}
+
+/* ✅ Make the select column tight so Select All + checkbox don't look separated */
+.select-col {
+  width: 1%;
+  white-space: nowrap;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+/* REMOVE EXTRA SPACE FROM SELECT-ALL HEADER CELL */
+.select-all-th {
+  padding: 4px !important;      /* overrides th padding */
+  text-align: center;
+}
+
+/* TIGHT ALIGNMENT */
+.select-all-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;                     /* small intentional space */
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* REMOVE BROWSER DEFAULT SPACING */
+.select-all-wrap input {
+  margin: 0;
+  padding: 0;
+  width: 16px;
+  height: 16px;
 }

@@ -27,7 +27,12 @@ const DEPARTMENT_ORDER = [
 const DEPARTMENTS = {
   Others: ["Shift End", "Washroom", "Break", "Move To Another Department"],
   "Tote Wash": ["Tote Wash", "Tote Wash Cleanup", "Move Pallets"],
-  Pick: ["Ambient Picking", "Ambient Pick Cleanup", "Chill Picking", "Chill Pick Cleanup"],
+  Pick: [
+    "Ambient Picking",
+    "Ambient Pick Cleanup",
+    "Chill Picking",
+    "Chill Pick Cleanup",
+  ],
   Bagging: ["Bagging", "Bagging Runner", "Bagging Cleanup"],
   Decant: [
     "MHE",
@@ -110,7 +115,7 @@ export default function Admin({ onExit }) {
 
   const logout = async () => {
     await signOut(auth);
-    onExit(); // 🔴 ALWAYS GO BACK TO MAIN PAGE
+    onExit();
   };
 
   /* LIVE SUBSCRIBE */
@@ -138,13 +143,13 @@ export default function Admin({ onExit }) {
       Math.floor((s % 3600) / 60)
     ).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
-  const parseTerms = (t) =>
-    t.toLowerCase().split(/[\s,]+/).filter(Boolean);
+  const parseTerms = (t) => t.toLowerCase().split(/[\s,]+/).filter(Boolean);
 
   const filtered = activeTasks.filter((r) => {
     if (fEmp) {
       const terms = parseTerms(fEmp);
-      if (!terms.some((t) => r.employeeId.toLowerCase().includes(t))) return false;
+      if (!terms.some((t) => r.employeeId.toLowerCase().includes(t)))
+        return false;
     }
     if (fDept && r.department !== fDept) return false;
     if (fTask && r.task !== fTask) return false;
@@ -186,7 +191,9 @@ export default function Admin({ onExit }) {
 
   /* CSV */
   const exportCSV = async () => {
-    const snap = await getDocs(query(collection(db, "taskLogs"), orderBy("startTime")));
+    const snap = await getDocs(
+      query(collection(db, "taskLogs"), orderBy("startTime"))
+    );
     const rows = snap.docs.map((d) => d.data());
 
     let csv = "employee,task,department,date,duration\n";
@@ -249,10 +256,16 @@ export default function Admin({ onExit }) {
       </div>
 
       <div className="admin-toggle">
-        <button className={view === "live" ? "active" : ""} onClick={() => setView("live")}>
+        <button
+          className={view === "live" ? "active" : ""}
+          onClick={() => setView("live")}
+        >
           Live View
         </button>
-        <button className={view === "history" ? "active" : ""} onClick={() => setView("history")}>
+        <button
+          className={view === "history" ? "active" : ""}
+          onClick={() => setView("history")}
+        >
           History View
         </button>
       </div>
@@ -261,28 +274,60 @@ export default function Admin({ onExit }) {
         <>
           <div className="history-controls">
             <div className="filter-text">Filters</div>
-            <input placeholder="Employee(s)" value={fEmp} onChange={(e) => setFEmp(e.target.value)} />
+            <input
+              placeholder="Employee(s)"
+              value={fEmp}
+              onChange={(e) => setFEmp(e.target.value)}
+            />
             <select value={fDept} onChange={(e) => setFDept(e.target.value)}>
               <option value="">All Depts</option>
-              {DEPARTMENT_ORDER.map((d) => <option key={d}>{d}</option>)}
+              {DEPARTMENT_ORDER.map((d) => (
+                <option key={d}>{d}</option>
+              ))}
             </select>
-            <select value={fTask} onChange={(e) => setFTask(e.target.value)} disabled={!fDept}>
+            <select
+              value={fTask}
+              onChange={(e) => setFTask(e.target.value)}
+              disabled={!fDept}
+            >
               <option value="">All Tasks</option>
-              {fDept && DEPARTMENTS[fDept].map((t) => <option key={t}>{t}</option>)}
+              {fDept &&
+                DEPARTMENTS[fDept].map((t) => <option key={t}>{t}</option>)}
             </select>
-            <input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)} />
-            <input type="number" placeholder="Min" value={fMin} onChange={(e) => setFMin(e.target.value)} />
+            <input
+              type="date"
+              value={fDate}
+              onChange={(e) => setFDate(e.target.value)}
+            />
+            <input
+              type="number"
+              placeholder="Min"
+              value={fMin}
+              onChange={(e) => setFMin(e.target.value)}
+            />
           </div>
 
           {selected.length > 0 && (
             <div className="admin-actions">
-              <select value={bulkDept} onChange={(e) => setBulkDept(e.target.value)}>
+              <select
+                value={bulkDept}
+                onChange={(e) => setBulkDept(e.target.value)}
+              >
                 <option value="">Dept</option>
-                {DEPARTMENT_ORDER.map((d) => <option key={d}>{d}</option>)}
+                {DEPARTMENT_ORDER.map((d) => (
+                  <option key={d}>{d}</option>
+                ))}
               </select>
-              <select value={bulkTask} onChange={(e) => setBulkTask(e.target.value)} disabled={!bulkDept}>
+              <select
+                value={bulkTask}
+                onChange={(e) => setBulkTask(e.target.value)}
+                disabled={!bulkDept}
+              >
                 <option value="">Task</option>
-                {bulkDept && DEPARTMENTS[bulkDept].map((t) => <option key={t}>{t}</option>)}
+                {bulkDept &&
+                  DEPARTMENTS[bulkDept].map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
               </select>
               <button onClick={bulkUpdate}>Update Selected</button>
               <button onClick={exportCSV}>Download CSV</button>
@@ -292,14 +337,19 @@ export default function Admin({ onExit }) {
           <table>
             <thead>
               <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={(e) =>
-                      setSelected(e.target.checked ? filtered.map((r) => r.employeeId) : [])
-                    }
-                  />
+                <th className="select-all-th">
+                  <label className="select-all-wrap">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={(e) =>
+                        setSelected(
+                          e.target.checked ? filtered.map((r) => r.employeeId) : []
+                        )
+                      }
+                    />
+                    <span>Select All</span>
+                  </label>
                 </th>
                 <th>Employee</th>
                 <th>Task</th>
@@ -308,10 +358,11 @@ export default function Admin({ onExit }) {
                 <th>Duration</th>
               </tr>
             </thead>
+
             <tbody>
               {filtered.map((r) => (
                 <tr key={r.employeeId}>
-                  <td>
+                  <td className="select-col">
                     <input
                       type="checkbox"
                       checked={selected.includes(r.employeeId)}
