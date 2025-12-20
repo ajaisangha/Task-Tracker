@@ -195,39 +195,91 @@ export default function Admin({ onExit }) {
   };
 
   /* ================= CSV EXPORT ================= */
-  const exportCSV = async () => {
-    const snap = await getDocs(
-      query(collection(db, "taskLogs"), orderBy("startTime"))
-    );
+/* ================= CSV EXPORT (AGGREGATED) ================= */
+const exportCSV = async () => {
+  const snap = await getDocs(
+    query(collection(db, "taskLogs"), orderBy("startTime"))
+  );
 
-    const rows = snap.docs
-      .map((d) => d.data())
-      .filter((r) => r.task !== "Shift End");
+  const rows = snap.docs.map((d) => d.data());
 
-    // group employee → date → task
-    let csv = "employee,task,department,date,duration\n";
+  // group logs by employee
+  const byEmployee = {};
+  rows.forEach((r) => {
+    if (!byEmployee[r.employeeId]) {
+      byEmployee[r.employeeId] = [];
+    }
+    byEmployee[r.employeeId].push(r);
+  });
 
-    rows
-      .sort(
-        (a, b) =>
-          a.employeeId.localeCompare(b.employeeId) ||
-          a.startTime.localeCompare(b.startTime)
-      )
-      .forEach((r) => {
+  let csv = "";
+
+  Object.keys(byEmployee)
+    .sort()
+    .forEach((emp) => {
+      const logs = byEmployee[emp].sort(
+        (a, b) => new Date(a.startTime) - new Date(b.startTime)
+      );
+
+      csv += `${emp}\n`;
+      csv += `department,task,startTime,endTime,duration\n`;
+
+      let aggregate = {}; // key → aggregated row
+
+      logs.forEach((r) => {
+        // ignore Shift End completely
+        if (r.task === "Shift End") {
+          // flush current aggregation
+          Object.values(aggregate).forEach((a) => {
+            csv += `${a.department},${a.task},${a.startTime},${a.endTime},${fmt(
+              a.duration
+            )}\n`;
+          });
+
+          csv += `\n`;
+          aggregate = {};
+          return;
+        }
+
+        if (!r.endTime) return;
+
+        const key = `${r.department}|${r.task}`;
         const dur =
           (new Date(r.endTime) - new Date(r.startTime)) / 1000;
-        csv += `${r.employeeId},${r.task},${r.department},${r.startTime.slice(
-          0,
-          10
-        )},${fmt(dur)}\n`;
+
+        if (!aggregate[key]) {
+          aggregate[key] = {
+            department: r.department,
+            task: r.task,
+            startTime: r.startTime,
+            endTime: r.endTime,
+            duration: dur,
+          };
+        } else {
+          aggregate[key].duration += dur;
+          aggregate[key].endTime = r.endTime;
+        }
       });
 
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "task-report.csv";
-    a.click();
-  };
+      // flush remaining if shift never ended
+      Object.values(aggregate).forEach((a) => {
+        csv += `${a.department},${a.task},${a.startTime},${a.endTime},${fmt(
+          a.duration
+        )}\n`;
+      });
+
+      csv += `\n`;
+    });
+
+  const url = URL.createObjectURL(
+    new Blob([csv], { type: "text/csv" })
+  );
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "task-report.csv";
+  a.click();
+};
 
   /* ================= LOGIN UI ================= */
   if (!loggedIn) {
