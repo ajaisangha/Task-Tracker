@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { auth, db } from "./firebase";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  sendPasswordResetEmail,
+} from "firebase/auth";
 import {
   collection,
   onSnapshot,
@@ -75,6 +79,7 @@ export default function Admin({ onExit }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
 
   /* ================= VIEW ================= */
   const [view, setView] = useState("live");
@@ -102,7 +107,8 @@ export default function Admin({ onExit }) {
     setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // loggedIn will be set by onAuthStateChanged
+      setLoggedIn(true);
+      setView("live");
     } catch (e) {
       if (e.code === "auth/user-not-found") setError("User not found");
       else if (e.code === "auth/wrong-password") setError("Wrong password");
@@ -115,24 +121,26 @@ export default function Admin({ onExit }) {
     onExit();
   };
 
-  /* ================= PERSISTENT LOGIN ================= */
-  useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setLoggedIn(true);
-        setView("live"); // default view
-      } else {
-        setLoggedIn(false);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  const resetPassword = async () => {
+    if (!email) {
+      setError("Please enter your email to reset password");
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetEmailSent(true);
+      setError("");
+    } catch (e) {
+      if (e.code === "auth/user-not-found") setError("User not found");
+      else setError("Failed to send reset email");
+    }
+  };
 
   /* ================= LIVE SUBSCRIBE ================= */
   useEffect(() => {
     if (!loggedIn) return;
 
-    const unsub = onSnapshot(collection(db, "activeTasks"), (snap) => {
+    return onSnapshot(collection(db, "activeTasks"), (snap) => {
       const rows = [];
       snap.forEach((d) => {
         const data = d.data();
@@ -142,8 +150,6 @@ export default function Admin({ onExit }) {
       });
       setActiveTasks(rows);
     });
-
-    return () => unsub();
   }, [loggedIn]);
 
   /* ================= TIMER ================= */
@@ -266,6 +272,7 @@ export default function Admin({ onExit }) {
           )}\n`;
         });
 
+        // ✅ only ONE blank line between employees
         if (empIndex < Object.keys(byEmployee).length - 1) {
           csv += `\n`;
         }
@@ -288,14 +295,33 @@ export default function Admin({ onExit }) {
         <div className="admin-dialog">
           <h3>Admin Login</h3>
 
-          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <input
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
           {error && <div className="admin-error">{error}</div>}
+          {resetEmailSent && (
+            <div className="admin-success">
+              Password reset email sent successfully!
+            </div>
+          )}
 
           <div className="admin-dialog-buttons">
             <button onClick={login}>Login</button>
-            <button className="secondary" onClick={onExit}>Back</button>
+            <button className="secondary" onClick={resetPassword}>
+              Reset Password
+            </button>
+            <button className="secondary" onClick={onExit}>
+              Back
+            </button>
           </div>
         </div>
       </div>
@@ -308,14 +334,22 @@ export default function Admin({ onExit }) {
       <div className="admin-topbar">
         <div />
         <h2 className="admin-title">Task Tracker</h2>
-        <button className="logout-btn" onClick={logout}>Logout</button>
+        <button className="logout-btn" onClick={logout}>
+          Logout
+        </button>
       </div>
 
       <div className="admin-toggle">
-        <button className={view === "live" ? "active" : ""} onClick={() => setView("live")}>
+        <button
+          className={view === "live" ? "active" : ""}
+          onClick={() => setView("live")}
+        >
           Live View
         </button>
-        <button className={view === "history" ? "active" : ""} onClick={() => setView("history")}>
+        <button
+          className={view === "history" ? "active" : ""}
+          onClick={() => setView("history")}
+        >
           History View
         </button>
       </div>
@@ -325,28 +359,58 @@ export default function Admin({ onExit }) {
           <div className="history-controls">
             <button onClick={exportCSV}>Download CSV</button>
             <div className="filter-text">Filters</div>
-            <input placeholder="Employee(s)" value={fEmp} onChange={(e) => setFEmp(e.target.value)} />
+            <input
+              placeholder="Employee(s)"
+              value={fEmp}
+              onChange={(e) => setFEmp(e.target.value)}
+            />
             <select value={fDept} onChange={(e) => setFDept(e.target.value)}>
               <option value="">All Depts</option>
-              {DEPARTMENT_ORDER.map((d) => <option key={d}>{d}</option>)}
+              {DEPARTMENT_ORDER.map((d) => (
+                <option key={d}>{d}</option>
+              ))}
             </select>
-            <select value={fTask} onChange={(e) => setFTask(e.target.value)} disabled={!fDept}>
+            <select
+              value={fTask}
+              onChange={(e) => setFTask(e.target.value)}
+              disabled={!fDept}
+            >
               <option value="">All Tasks</option>
-              {fDept && DEPARTMENTS[fDept].map((t) => <option key={t}>{t}</option>)}
+              {fDept &&
+                DEPARTMENTS[fDept].map((t) => <option key={t}>{t}</option>)}
             </select>
-            <input type="date" value={fDate} onChange={(e) => setFDate(e.target.value)} />
-            <input type="number" placeholder="Min" value={fMin} onChange={(e) => setFMin(e.target.value)} />
+            <input
+              type="date"
+              value={fDate}
+              onChange={(e) => setFDate(e.target.value)}
+            />
+            <input
+              type="number"
+              placeholder="Min"
+              value={fMin}
+              onChange={(e) => setFMin(e.target.value)}
+            />
           </div>
 
           {selected.length > 0 && (
             <div className="admin-actions">
-              <select value={bulkDept} onChange={(e) => setBulkDept(e.target.value)}>
+              <select
+                value={bulkDept}
+                onChange={(e) => setBulkDept(e.target.value)}
+              >
                 <option value="">Dept</option>
-                {DEPARTMENT_ORDER.map((d) => <option key={d}>{d}</option>)}
+                {DEPARTMENT_ORDER.map((d) => (
+                  <option key={d}>{d}</option>
+                ))}
               </select>
-              <select value={bulkTask} onChange={(e) => setBulkTask(e.target.value)} disabled={!bulkDept}>
+              <select
+                value={bulkTask}
+                onChange={(e) => setBulkTask(e.target.value)}
+                disabled={!bulkDept}
+              >
                 <option value="">Task</option>
-                {bulkDept && DEPARTMENTS[bulkDept].map((t) => <option key={t}>{t}</option>)}
+                {bulkDept &&
+                  DEPARTMENTS[bulkDept].map((t) => <option key={t}>{t}</option>)}
               </select>
               <button onClick={bulkUpdate}>Update Selected</button>
             </div>
@@ -361,7 +425,11 @@ export default function Admin({ onExit }) {
                       type="checkbox"
                       checked={allSelected}
                       onChange={(e) =>
-                        setSelected(e.target.checked ? filtered.map((r) => r.employeeId) : [])
+                        setSelected(
+                          e.target.checked
+                            ? filtered.map((r) => r.employeeId)
+                            : []
+                        )
                       }
                     />
                     <span>Select All</span>
