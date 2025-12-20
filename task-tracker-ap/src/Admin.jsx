@@ -216,7 +216,7 @@ const exportCSV = async () => {
 
   Object.keys(byEmployee)
     .sort()
-    .forEach((emp) => {
+    .forEach((emp, empIndex) => {
       const logs = byEmployee[emp].sort(
         (a, b) => new Date(a.startTime) - new Date(b.startTime)
       );
@@ -224,24 +224,10 @@ const exportCSV = async () => {
       csv += `${emp}\n`;
       csv += `department,task,startTime,endTime,duration\n`;
 
-      let aggregate = {}; // key → aggregated row
+      let aggregate = {};
 
       logs.forEach((r) => {
-        // ignore Shift End completely
-        if (r.task === "Shift End") {
-          // flush current aggregation
-          Object.values(aggregate).forEach((a) => {
-            csv += `${a.department},${a.task},${a.startTime},${a.endTime},${fmt(
-              a.duration
-            )}\n`;
-          });
-
-          csv += `\n`;
-          aggregate = {};
-          return;
-        }
-
-        if (!r.endTime) return;
+        if (r.task === "Shift End" || !r.endTime) return;
 
         const key = `${r.department}|${r.task}`;
         const dur =
@@ -261,14 +247,16 @@ const exportCSV = async () => {
         }
       });
 
-      // flush remaining if shift never ended
       Object.values(aggregate).forEach((a) => {
         csv += `${a.department},${a.task},${a.startTime},${a.endTime},${fmt(
           a.duration
         )}\n`;
       });
 
-      csv += `\n`;
+      // ✅ only ONE blank line between employees
+      if (empIndex < Object.keys(byEmployee).length - 1) {
+        csv += `\n`;
+      }
     });
 
   const url = URL.createObjectURL(

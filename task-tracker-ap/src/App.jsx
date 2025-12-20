@@ -1,6 +1,14 @@
 import React, { useState } from "react";
 import { db } from "./firebase";
-import { doc, setDoc, deleteDoc, addDoc } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  deleteDoc,
+  addDoc,
+  getDoc,
+  collection,
+} from "firebase/firestore";
+
 import Admin from "./Admin";
 import "./App.css";
 
@@ -73,18 +81,55 @@ export default function App() {
     /^[a-z]+(?:\.[a-z]+)(?:\d+)?$/.test(v);
 
   /* ===== HANDLE TASK ===== */
-  const handleTaskChange = async (task, department) => {
-    if (!employeeId || inputError) return;
+const handleTaskChange = async (task, department) => {
+  if (!employeeId || inputError) return;
 
-    const now = new Date().toISOString();
+  const now = new Date().toISOString();
+  const activeRef = doc(db, "activeTasks", employeeId);
 
+  try {
+    const snap = await getDoc(activeRef);
+
+    // 🔴 SHIFT END
     if (task === "Shift End") {
-      await deleteDoc(doc(db, "activeTasks", employeeId));
+      // close current task if exists
+      if (snap.exists()) {
+        await addDoc(collection(db, "taskLogs"), {
+          ...snap.data(),
+          endTime: now,
+        });
+      }
+
+      // log shift end (timestamp only)
+      await addDoc(collection(db, "taskLogs"), {
+        employeeId,
+        department: "Others",
+        task: "Shift End",
+        startTime: now,
+      });
+
+      // overwrite active task instead of delete
+      await setDoc(activeRef, {
+        employeeId,
+        task: "Shift End",
+        department: "Others",
+        startTime: now,
+        endTime: now,
+      });
+
       setEmployeeId("");
       return;
     }
 
-    await setDoc(doc(db, "activeTasks", employeeId), {
+    // 🔵 NORMAL TASK CHANGE
+    if (snap.exists()) {
+      await addDoc(collection(db, "taskLogs"), {
+        ...snap.data(),
+        endTime: now,
+      });
+    }
+
+    await setDoc(activeRef, {
       employeeId,
       task,
       department,
@@ -92,9 +137,11 @@ export default function App() {
       endTime: null,
     });
 
-    // 🔴 RESET PAGE FOR NEXT EMPLOYEE (IMPORTANT)
     setEmployeeId("");
-  };
+  } catch (err) {
+    console.error("Task change failed:", err);
+  }
+};
 
   /* ================= RENDER ================= */
 if (page === "admin") {
