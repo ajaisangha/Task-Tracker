@@ -80,7 +80,7 @@ export default function App() {
   const isEmployeeIdValid = (v) =>
     /^[a-z]+(?:\.[a-z]+)(?:\d+)?$/.test(v);
 
-  /* ===== HANDLE TASK ===== */
+  /* ===== HANDLE TASK ===== *//*
 const handleTaskChange = async (task, department) => {
   if (!employeeId || inputError) return;
 
@@ -118,6 +118,58 @@ const handleTaskChange = async (task, department) => {
       });
 
       setEmployeeId("");
+      return;
+    }
+
+    // 🔵 NORMAL TASK CHANGE
+    if (snap.exists()) {
+      await addDoc(collection(db, "taskLogs"), {
+        ...snap.data(),
+        endTime: now,
+      });
+    }
+
+    await setDoc(activeRef, {
+      employeeId,
+      task,
+      department,
+      startTime: now,
+      endTime: null,
+    });
+
+    setEmployeeId("");
+  } catch (err) {
+    console.error("Task change failed:", err);
+  }
+};
+*/
+
+const handleTaskChange = async (task, department) => {
+  if (!employeeId || inputError) return;
+
+  const now = new Date().toISOString();
+  const activeRef = doc(db, "activeTasks", employeeId);
+
+  try {
+    const snap = await getDoc(activeRef);
+
+    // 🔴 SHIFT END
+    if (task === "Shift End") {
+      // log shift end (timestamp only) in taskLogs
+      await addDoc(collection(db, "taskLogs"), {
+        employeeId,
+        department: "Others",
+        task: "Shift End",
+        startTime: now,
+        endTime: now,
+      });
+
+      // delete active task for this employee
+      if (snap.exists()) {
+        await deleteDoc(activeRef);
+      }
+
+      setEmployeeId(""); // clear input
       return;
     }
 
