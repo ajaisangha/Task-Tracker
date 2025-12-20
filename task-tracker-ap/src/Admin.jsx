@@ -102,8 +102,7 @@ export default function Admin({ onExit }) {
     setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      setLoggedIn(true);
-      setView("live");
+      // loggedIn will be set by onAuthStateChanged
     } catch (e) {
       if (e.code === "auth/user-not-found") setError("User not found");
       else if (e.code === "auth/wrong-password") setError("Wrong password");
@@ -116,11 +115,24 @@ export default function Admin({ onExit }) {
     onExit();
   };
 
+  /* ================= PERSISTENT LOGIN ================= */
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        setLoggedIn(true);
+        setView("live"); // default view
+      } else {
+        setLoggedIn(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   /* ================= LIVE SUBSCRIBE ================= */
   useEffect(() => {
     if (!loggedIn) return;
 
-    return onSnapshot(collection(db, "activeTasks"), (snap) => {
+    const unsub = onSnapshot(collection(db, "activeTasks"), (snap) => {
       const rows = [];
       snap.forEach((d) => {
         const data = d.data();
@@ -130,6 +142,8 @@ export default function Admin({ onExit }) {
       });
       setActiveTasks(rows);
     });
+
+    return () => unsub();
   }, [loggedIn]);
 
   /* ================= TIMER ================= */
@@ -195,79 +209,77 @@ export default function Admin({ onExit }) {
   };
 
   /* ================= CSV EXPORT ================= */
-/* ================= CSV EXPORT (AGGREGATED) ================= */
-const exportCSV = async () => {
-  const snap = await getDocs(
-    query(collection(db, "taskLogs"), orderBy("startTime"))
-  );
+  const exportCSV = async () => {
+    const snap = await getDocs(
+      query(collection(db, "taskLogs"), orderBy("startTime"))
+    );
 
-  const rows = snap.docs.map((d) => d.data());
+    const rows = snap.docs.map((d) => d.data());
 
-  // group logs by employee
-  const byEmployee = {};
-  rows.forEach((r) => {
-    if (!byEmployee[r.employeeId]) {
-      byEmployee[r.employeeId] = [];
-    }
-    byEmployee[r.employeeId].push(r);
-  });
+    // group logs by employee
+    const byEmployee = {};
+    rows.forEach((r) => {
+      if (!byEmployee[r.employeeId]) {
+        byEmployee[r.employeeId] = [];
+      }
+      byEmployee[r.employeeId].push(r);
+    });
 
-  let csv = "";
+    let csv = "";
 
-  Object.keys(byEmployee)
-    .sort()
-    .forEach((emp, empIndex) => {
-      const logs = byEmployee[emp].sort(
-        (a, b) => new Date(a.startTime) - new Date(b.startTime)
-      );
+    Object.keys(byEmployee)
+      .sort()
+      .forEach((emp, empIndex) => {
+        const logs = byEmployee[emp].sort(
+          (a, b) => new Date(a.startTime) - new Date(b.startTime)
+        );
 
-      csv += `${emp}\n`;
-      csv += `department,task,startTime,endTime,duration\n`;
+        csv += `${emp}\n`;
+        csv += `department,task,startTime,endTime,duration\n`;
 
-      let aggregate = {};
+        let aggregate = {};
 
-      logs.forEach((r) => {
-        if (r.task === "Shift End" || !r.endTime) return;
+        logs.forEach((r) => {
+          if (r.task === "Shift End" || !r.endTime) return;
 
-        const key = `${r.department}|${r.task}`;
-        const dur =
-          (new Date(r.endTime) - new Date(r.startTime)) / 1000;
+          const key = `${r.department}|${r.task}`;
+          const dur =
+            (new Date(r.endTime) - new Date(r.startTime)) / 1000;
 
-        if (!aggregate[key]) {
-          aggregate[key] = {
-            department: r.department,
-            task: r.task,
-            startTime: r.startTime,
-            endTime: r.endTime,
-            duration: dur,
-          };
-        } else {
-          aggregate[key].duration += dur;
-          aggregate[key].endTime = r.endTime;
+          if (!aggregate[key]) {
+            aggregate[key] = {
+              department: r.department,
+              task: r.task,
+              startTime: r.startTime,
+              endTime: r.endTime,
+              duration: dur,
+            };
+          } else {
+            aggregate[key].duration += dur;
+            aggregate[key].endTime = r.endTime;
+          }
+        });
+
+        Object.values(aggregate).forEach((a) => {
+          csv += `${a.department},${a.task},${a.startTime},${a.endTime},${fmt(
+            a.duration
+          )}\n`;
+        });
+
+        if (empIndex < Object.keys(byEmployee).length - 1) {
+          csv += `\n`;
         }
       });
 
-      Object.values(aggregate).forEach((a) => {
-        csv += `${a.department},${a.task},${a.startTime},${a.endTime},${fmt(
-          a.duration
-        )}\n`;
-      });
+    const url = URL.createObjectURL(
+      new Blob([csv], { type: "text/csv" })
+    );
 
-      // ✅ only ONE blank line between employees
-      if (empIndex < Object.keys(byEmployee).length - 1) {
-        csv += `\n`;
-      }
-    });
-
-  const url = URL.createObjectURL(
-    new Blob([csv], { type: "text/csv" })
-  );
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "task-report.csv";
-  a.click();
-};
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "task-report.csv";
+    a.click();
+  };
 
   /* ================= LOGIN UI ================= */
   if (!loggedIn) {

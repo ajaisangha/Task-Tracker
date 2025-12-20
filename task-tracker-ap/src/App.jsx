@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { db } from "./firebase";
+import React, { useState, useEffect } from "react";
+import { auth, db } from "./firebase";
 import {
   doc,
   setDoc,
@@ -77,22 +77,50 @@ export default function App() {
   const [employeeId, setEmployeeId] = useState("");
   const [inputError, setInputError] = useState("");
 
+  // --------------------- Persistent Admin Login ---------------------
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        setPage("admin"); // automatically show admin page if logged in
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const isEmployeeIdValid = (v) =>
     /^[a-z]+(?:\.[a-z]+)(?:\d+)?$/.test(v);
 
-  /* ===== HANDLE TASK ===== *//*
-const handleTaskChange = async (task, department) => {
-  if (!employeeId || inputError) return;
+  /* ===== HANDLE TASK ===== */
+  const handleTaskChange = async (task, department) => {
+    if (!employeeId || inputError) return;
 
-  const now = new Date().toISOString();
-  const activeRef = doc(db, "activeTasks", employeeId);
+    const now = new Date().toISOString();
+    const activeRef = doc(db, "activeTasks", employeeId);
 
-  try {
-    const snap = await getDoc(activeRef);
+    try {
+      const snap = await getDoc(activeRef);
 
-    // 🔴 SHIFT END
-    if (task === "Shift End") {
-      // close current task if exists
+      // 🔴 SHIFT END
+      if (task === "Shift End") {
+        // log shift end (timestamp only) in taskLogs
+        await addDoc(collection(db, "taskLogs"), {
+          employeeId,
+          department: "Others",
+          task: "Shift End",
+          startTime: now,
+          endTime: now,
+        });
+
+        // delete active task for this employee
+        if (snap.exists()) {
+          await deleteDoc(activeRef);
+        }
+
+        setEmployeeId(""); // clear input
+        return;
+      }
+
+      // 🔵 NORMAL TASK CHANGE
       if (snap.exists()) {
         await addDoc(collection(db, "taskLogs"), {
           ...snap.data(),
@@ -100,106 +128,24 @@ const handleTaskChange = async (task, department) => {
         });
       }
 
-      // log shift end (timestamp only)
-      await addDoc(collection(db, "taskLogs"), {
-        employeeId,
-        department: "Others",
-        task: "Shift End",
-        startTime: now,
-      });
-
-      // overwrite active task instead of delete
       await setDoc(activeRef, {
         employeeId,
-        task: "Shift End",
-        department: "Others",
+        task,
+        department,
         startTime: now,
-        endTime: now,
+        endTime: null,
       });
 
       setEmployeeId("");
-      return;
+    } catch (err) {
+      console.error("Task change failed:", err);
     }
-
-    // 🔵 NORMAL TASK CHANGE
-    if (snap.exists()) {
-      await addDoc(collection(db, "taskLogs"), {
-        ...snap.data(),
-        endTime: now,
-      });
-    }
-
-    await setDoc(activeRef, {
-      employeeId,
-      task,
-      department,
-      startTime: now,
-      endTime: null,
-    });
-
-    setEmployeeId("");
-  } catch (err) {
-    console.error("Task change failed:", err);
-  }
-};
-*/
-
-const handleTaskChange = async (task, department) => {
-  if (!employeeId || inputError) return;
-
-  const now = new Date().toISOString();
-  const activeRef = doc(db, "activeTasks", employeeId);
-
-  try {
-    const snap = await getDoc(activeRef);
-
-    // 🔴 SHIFT END
-    if (task === "Shift End") {
-      // log shift end (timestamp only) in taskLogs
-      await addDoc(collection(db, "taskLogs"), {
-        employeeId,
-        department: "Others",
-        task: "Shift End",
-        startTime: now,
-        endTime: now,
-      });
-
-      // delete active task for this employee
-      if (snap.exists()) {
-        await deleteDoc(activeRef);
-      }
-
-      setEmployeeId(""); // clear input
-      return;
-    }
-
-    // 🔵 NORMAL TASK CHANGE
-    if (snap.exists()) {
-      await addDoc(collection(db, "taskLogs"), {
-        ...snap.data(),
-        endTime: now,
-      });
-    }
-
-    await setDoc(activeRef, {
-      employeeId,
-      task,
-      department,
-      startTime: now,
-      endTime: null,
-    });
-
-    setEmployeeId("");
-  } catch (err) {
-    console.error("Task change failed:", err);
-  }
-};
+  };
 
   /* ================= RENDER ================= */
-if (page === "admin") {
-  return <Admin onExit={() => setPage("main")} />;
-}
-
+  if (page === "admin") {
+    return <Admin onExit={() => setPage("main")} />;
+  }
 
   return (
     <div id="root">
@@ -207,7 +153,6 @@ if (page === "admin") {
       <div style={{ position: "absolute", top: 12, right: 12 }}>
         <button onClick={() => setPage("admin")}>Admin</button>
       </div>
-
 
       <div className={!employeeId ? "center-screen" : "top-screen"}>
         <h1>Task Tracker</h1>
