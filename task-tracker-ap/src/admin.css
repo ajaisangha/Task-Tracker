@@ -46,16 +46,24 @@
   text-align: center;
 }
 
+.admin-success {
+  color: green;
+  font-size: 13px;
+  text-align: center;
+}
+
 .admin-page {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
+  position: relative;
 }
 
 .admin-topbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  margin-bottom: 12px;
 }
 
 .admin-title {
@@ -63,14 +71,21 @@
   font-weight: 600;
 }
 
+/* FIX LOGOUT BUTTON ON TOP RIGHT */
 .logout-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
   background: #b00020;
   color: white;
   padding: 8px 16px;
   border-radius: 6px;
   height: 40px;
+  z-index: 1000;
+  cursor: pointer;
 }
 
+/* TOGGLE */
 .admin-toggle {
   display: flex;
   justify-content: center;
@@ -88,38 +103,58 @@
   color: white;
 }
 
+/* HISTORY CONTROLS */
 .history-controls {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
+  flex-direction: column; /* stack CSV button, text, then filters */
+  align-items: flex-start;
+  gap: 10px;
   margin-bottom: 20px;
 }
 
-.filter-text {
-  width: 100%;
-  text-align: center;
+.download-csv-btn {
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  height: 42px;
+  padding: 0 16px;
+  cursor: pointer;
   font-weight: bold;
-  font-size: 22px;
-  margin-bottom: 6px;
 }
 
-.history-controls input,
-.history-controls select {
+.filter-text {
+  font-weight: bold;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+/* FILTER INPUTS LINE */
+.filter-inputs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.filter-inputs input,
+.filter-inputs select {
   height: 42px;
-  min-width: 170px;
+  min-width: 140px;
   padding: 0 12px;
   font-size: 14px;
   border-radius: 6px;
   border: 1px solid #ccc;
   background: #fff;
+  flex-shrink: 0;
 }
 
-.history-controls input[type="number"] {
+.filter-inputs input[type="number"] {
   min-width: 100px;
 }
 
+/* BULK ACTIONS */
 .admin-actions {
   display: flex;
   justify-content: center;
@@ -131,7 +166,7 @@
 .admin-actions select,
 .admin-actions button {
   height: 42px;
-  min-width: 170px;
+  min-width: 140px;
   padding: 0 14px;
   font-size: 14px;
   border-radius: 6px;
@@ -160,7 +195,6 @@ tbody tr:nth-child(even) {
   background: #fafafa;
 }
 
-/* ✅ Make the select column tight so Select All + checkbox don't look separated */
 .select-col {
   width: 1%;
   white-space: nowrap;
@@ -168,22 +202,19 @@ tbody tr:nth-child(even) {
   padding-right: 10px;
 }
 
-/* REMOVE EXTRA SPACE FROM SELECT-ALL HEADER CELL */
 .select-all-th {
-  padding: 4px !important;      /* overrides th padding */
+  padding: 4px !important;
   text-align: center;
 }
 
-/* TIGHT ALIGNMENT */
 .select-all-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 4px;                     /* small intentional space */
+  gap: 4px;
   white-space: nowrap;
   line-height: 1;
 }
 
-/* REMOVE BROWSER DEFAULT SPACING */
 .select-all-wrap input {
   margin: 0;
   padding: 0;

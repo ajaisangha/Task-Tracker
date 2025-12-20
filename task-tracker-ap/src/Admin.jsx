@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
+  onAuthStateChanged,
 } from "firebase/auth";
 import {
   collection,
@@ -34,7 +35,12 @@ const DEPARTMENT_ORDER = [
 const DEPARTMENTS = {
   Others: ["Shift End", "Washroom", "Break", "Move To Another Department"],
   "Tote Wash": ["Tote Wash", "Tote Wash Cleanup", "Move Pallets"],
-  Pick: ["Ambient Picking", "Ambient Pick Cleanup", "Chill Picking", "Chill Pick Cleanup"],
+  Pick: [
+    "Ambient Picking",
+    "Ambient Pick Cleanup",
+    "Chill Picking",
+    "Chill Pick Cleanup",
+  ],
   Bagging: ["Bagging", "Bagging Runner", "Bagging Cleanup"],
   Decant: [
     "MHE",
@@ -136,6 +142,17 @@ export default function Admin({ onExit }) {
     }
   };
 
+  /* ================= PERSISTENT LOGIN ================= */
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setLoggedIn(true);
+        setView("live");
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   /* ================= LIVE SUBSCRIBE ================= */
   useEffect(() => {
     if (!loggedIn) return;
@@ -173,7 +190,8 @@ export default function Admin({ onExit }) {
   const filtered = activeTasks.filter((r) => {
     if (fEmp) {
       const terms = parseTerms(fEmp);
-      if (!terms.some((t) => r.employeeId.toLowerCase().includes(t))) return false;
+      if (!terms.some((t) => r.employeeId.toLowerCase().includes(t)))
+        return false;
     }
     if (fDept && r.department !== fDept) return false;
     if (fTask && r.task !== fTask) return false;
@@ -222,12 +240,9 @@ export default function Admin({ onExit }) {
 
     const rows = snap.docs.map((d) => d.data());
 
-    // group logs by employee
     const byEmployee = {};
     rows.forEach((r) => {
-      if (!byEmployee[r.employeeId]) {
-        byEmployee[r.employeeId] = [];
-      }
+      if (!byEmployee[r.employeeId]) byEmployee[r.employeeId] = [];
       byEmployee[r.employeeId].push(r);
     });
 
@@ -249,8 +264,7 @@ export default function Admin({ onExit }) {
           if (r.task === "Shift End" || !r.endTime) return;
 
           const key = `${r.department}|${r.task}`;
-          const dur =
-            (new Date(r.endTime) - new Date(r.startTime)) / 1000;
+          const dur = (new Date(r.endTime) - new Date(r.startTime)) / 1000;
 
           if (!aggregate[key]) {
             aggregate[key] = {
@@ -272,7 +286,6 @@ export default function Admin({ onExit }) {
           )}\n`;
         });
 
-        // ✅ only ONE blank line between employees
         if (empIndex < Object.keys(byEmployee).length - 1) {
           csv += `\n`;
         }
@@ -281,7 +294,6 @@ export default function Admin({ onExit }) {
     const url = URL.createObjectURL(
       new Blob([csv], { type: "text/csv" })
     );
-
     const a = document.createElement("a");
     a.href = url;
     a.download = "task-report.csv";
@@ -334,10 +346,11 @@ export default function Admin({ onExit }) {
       <div className="admin-topbar">
         <div />
         <h2 className="admin-title">Task Tracker</h2>
-        <button className="logout-btn" onClick={logout}>
-          Logout
-        </button>
       </div>
+
+      <button className="logout-btn" onClick={logout}>
+        Logout
+      </button>
 
       <div className="admin-toggle">
         <button
@@ -357,39 +370,45 @@ export default function Admin({ onExit }) {
       {view === "live" && (
         <>
           <div className="history-controls">
-            <button onClick={exportCSV}>Download CSV</button>
+            <button className="download-csv-btn" onClick={exportCSV}>
+              Download CSV
+            </button>
+
             <div className="filter-text">Filters</div>
-            <input
-              placeholder="Employee(s)"
-              value={fEmp}
-              onChange={(e) => setFEmp(e.target.value)}
-            />
-            <select value={fDept} onChange={(e) => setFDept(e.target.value)}>
-              <option value="">All Depts</option>
-              {DEPARTMENT_ORDER.map((d) => (
-                <option key={d}>{d}</option>
-              ))}
-            </select>
-            <select
-              value={fTask}
-              onChange={(e) => setFTask(e.target.value)}
-              disabled={!fDept}
-            >
-              <option value="">All Tasks</option>
-              {fDept &&
-                DEPARTMENTS[fDept].map((t) => <option key={t}>{t}</option>)}
-            </select>
-            <input
-              type="date"
-              value={fDate}
-              onChange={(e) => setFDate(e.target.value)}
-            />
-            <input
-              type="number"
-              placeholder="Min"
-              value={fMin}
-              onChange={(e) => setFMin(e.target.value)}
-            />
+
+            <div className="filter-inputs">
+              <input
+                placeholder="Employee(s)"
+                value={fEmp}
+                onChange={(e) => setFEmp(e.target.value)}
+              />
+              <select value={fDept} onChange={(e) => setFDept(e.target.value)}>
+                <option value="">All Depts</option>
+                {DEPARTMENT_ORDER.map((d) => (
+                  <option key={d}>{d}</option>
+                ))}
+              </select>
+              <select
+                value={fTask}
+                onChange={(e) => setFTask(e.target.value)}
+                disabled={!fDept}
+              >
+                <option value="">All Tasks</option>
+                {fDept &&
+                  DEPARTMENTS[fDept].map((t) => <option key={t}>{t}</option>)}
+              </select>
+              <input
+                type="date"
+                value={fDate}
+                onChange={(e) => setFDate(e.target.value)}
+              />
+              <input
+                type="number"
+                placeholder="Min"
+                value={fMin}
+                onChange={(e) => setFMin(e.target.value)}
+              />
+            </div>
           </div>
 
           {selected.length > 0 && (
@@ -410,7 +429,9 @@ export default function Admin({ onExit }) {
               >
                 <option value="">Task</option>
                 {bulkDept &&
-                  DEPARTMENTS[bulkDept].map((t) => <option key={t}>{t}</option>)}
+                  DEPARTMENTS[bulkDept].map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
               </select>
               <button onClick={bulkUpdate}>Update Selected</button>
             </div>
