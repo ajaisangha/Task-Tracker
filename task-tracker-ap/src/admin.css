@@ -1,4 +1,109 @@
-/* Overlay / Dialog */
+/* ----------------------------------
+   VOILA COLOR VARIABLES (INHERITED)
+---------------------------------- */
+:root {
+  --title-color: #4A7EFF;
+  --button-color: #2F2F2F;
+  --button-text: #FFFFFF;
+  --heading-color: #6E3BFF;
+  --text-color: #000000;
+  --border-color: #E0E0E0;
+  --bg: #FFFFFF;
+}
+
+/* ----------------------------------
+   GLOBAL / PAGE
+---------------------------------- */
+.admin-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+  position: relative;
+  font-family: "Segoe UI", "Roboto", sans-serif;
+  color: var(--text-color);
+  background: var(--bg);
+  box-sizing: border-box;
+}
+
+/* Top bar */
+.admin-topbar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.admin-title {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--title-color);
+}
+
+/* ----------------------------------
+   LOGOUT BUTTON
+---------------------------------- */
+.logout-btn {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  background: #FFB45C;
+  color: #000;
+  padding: 8px 16px;
+  border-radius: 999px;
+  height: 40px;
+  z-index: 1000;
+  cursor: pointer;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.logout-btn:hover {
+  background: #FFD08A;
+  transform: translateY(-1px);
+}
+
+/* ----------------------------------
+   VIEW TOGGLE
+---------------------------------- */
+.admin-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+
+.admin-toggle button {
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--button-color);
+  transition: background 0.15s ease, color 0.15s ease,
+    border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-toggle button:hover {
+  background: #f4f4f8;
+}
+
+.admin-toggle .active {
+  background: var(--title-color);
+  border-color: var(--title-color);
+  color: var(--button-text);
+  box-shadow: 0 4px 12px rgba(74, 126, 255, 0.3);
+}
+
+/* ----------------------------------
+   LOGIN OVERLAY + DIALOG
+---------------------------------- */
 .admin-overlay {
   position: fixed;
   inset: 0;
@@ -7,12 +112,11 @@
   align-items: center;
   justify-content: center;
   z-index: 999;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: "Segoe UI", "Roboto", sans-serif;
 }
 
 .admin-dialog {
-  background: #ffffff;
+  background: #fff;
   padding: 24px 28px;
   width: 360px;
   border-radius: 12px;
@@ -27,6 +131,7 @@
   font-size: 20px;
   font-weight: 600;
   text-align: center;
+  color: var(--heading-color);
 }
 
 .admin-dialog input {
@@ -34,14 +139,15 @@
   padding: 0 12px;
   font-size: 14px;
   border-radius: 6px;
-  border: 1px solid #ccd0d5;
+  border: 1.5px solid var(--border-color);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  color: var(--text-color);
 }
 
 .admin-dialog input:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.18);
+  border-color: var(--title-color);
+  box-shadow: 0 0 0 2px rgba(74, 126, 255, 0.2);
 }
 
 .admin-dialog-buttons {
@@ -61,27 +167,31 @@
   transition: background 0.15s ease, transform 0.05s ease;
 }
 
-.admin-dialog-buttons button:hover {
+/* Primary button (login) */
+.admin-dialog-buttons button:not(.secondary) {
+  background: var(--title-color);
+  color: var(--button-text);
+}
+
+.admin-dialog-buttons button:not(.secondary):hover {
+  background: #6e95ff;
   transform: translateY(-1px);
 }
 
-.admin-dialog-buttons button:active {
-  transform: translateY(0);
-}
-
-.admin-dialog-buttons button:not(.secondary) {
-  background: #007bff;
-  color: #ffffff;
-}
-
+/* Secondary buttons */
 .admin-dialog-buttons .secondary {
-  background: #f4f4f4;
-  color: #333333;
+  background: #f5f5f5;
+  color: var(--button-color);
 }
 
-/* Alerts */
+.admin-dialog-buttons .secondary:hover {
+  background: #e9e9e9;
+  transform: translateY(-1px);
+}
+
+/* Messages */
 .admin-error {
-  color: #c62828;
+  color: #d32f2f;
   font-size: 13px;
   text-align: center;
 }
@@ -92,107 +202,100 @@
   text-align: center;
 }
 
-/* Page Layout */
-.admin-page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px 16px 40px;
-  position: relative;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
-}
-
-.admin-topbar {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.admin-title {
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-/* Logout button */
-.logout-btn {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  background: #b00020;
-  color: white;
-  padding: 8px 16px;
-  border-radius: 999px;
-  height: 40px;
-  z-index: 1000;
-  cursor: pointer;
-  border: none;
-  font-size: 14px;
-  font-weight: 500;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-  transition: background 0.15s ease, transform 0.05s ease;
-}
-
-.logout-btn:hover {
-  background: #c62828;
-  transform: translateY(-1px);
-}
-
-/* Toggle */
-.admin-toggle {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin: 16px 0 20px;
-}
-
-.admin-toggle button {
-  height: 40px;
-  padding: 0 20px;
-  border-radius: 999px;
-  border: 1px solid #d0d7de;
-  background: #ffffff;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  color: #333333;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.admin-toggle button:hover {
-  background: #f4f6f8;
-}
-
-.admin-toggle .active {
-  background: #007bff;
-  border-color: #007bff;
-  color: white;
-  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.25);
-}
-
-/* Buttons */
-.primary-btn {
-  margin-top: 16px;
-  background-color: #007bff;
-  color: #ffffff;
+/* ----------------------------------
+   GENERIC BUTTONS (INSIDE ADMIN)
+---------------------------------- */
+.primary-btn,
+.download-csv-btn,
+.admin-actions button {
+  background-color: var(--title-color);
+  color: var(--button-text);
   border: none;
   border-radius: 8px;
-  height: 40px;
-  padding: 0 20px;
+  height: 38px;
+  padding: 0 18px;
   cursor: pointer;
   font-weight: 500;
   font-size: 14px;
   transition: background 0.15s ease, transform 0.05s ease;
 }
 
-.primary-btn:hover {
-  background-color: #0062cc;
+.primary-btn:hover,
+.download-csv-btn:hover,
+.admin-actions button:hover {
+  background-color: #6e95ff;
   transform: translateY(-1px);
 }
 
-/* History & Filters */
+/* ----------------------------------
+   FILTER AREAS (LIVE + HISTORY)
+---------------------------------- */
+.history-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+  margin-bottom: 16px;
+}
+
+.filter-text {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 2px;
+  color: var(--heading-color);
+}
+
+.filter-inputs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.filter-inputs input,
+.filter-inputs select {
+  height: 38px;
+  min-width: 140px;
+  padding: 0 10px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  color: var(--text-color);
+  flex-shrink: 0;
+}
+
+.filter-inputs input[type="number"] {
+  min-width: 110px;
+}
+
+/* ----------------------------------
+   BULK ACTIONS
+---------------------------------- */
+.admin-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.admin-actions select {
+  height: 38px;
+  min-width: 140px;
+  padding: 0 14px;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  color: var(--text-color);
+}
+
+/* ----------------------------------
+   DATE RANGE (HISTORY)
+---------------------------------- */
 .history-view {
   margin-top: 8px;
 }
@@ -201,6 +304,7 @@
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 10px;
+  color: var(--heading-color);
 }
 
 .date-range-inputs {
@@ -227,120 +331,60 @@
   padding: 0 10px;
   font-size: 14px;
   border-radius: 6px;
-  border: 1px solid #ccd0d5;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
 }
 
-/* History / live filter controls */
-.history-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 18px;
-  margin-bottom: 16px;
-}
-
-.filter-text {
-  font-weight: 600;
-  font-size: 15px;
-  margin-bottom: 2px;
-}
-
-.filter-inputs {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 10px;
-  width: 100%;
-  overflow-x: auto;
-}
-
-.filter-inputs input,
-.filter-inputs select {
-  height: 38px;
-  min-width: 140px;
-  padding: 0 10px;
-  font-size: 14px;
-  border-radius: 6px;
-  border: 1px solid #ccd0d5;
-  background: #fff;
-  flex-shrink: 0;
-}
-
-.filter-inputs input[type="number"] {
-  min-width: 110px;
-}
-
-/* Download CSV */
-.download-csv-btn {
-  background-color: #007bff;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  height: 40px;
-  padding: 0 18px;
-  cursor: pointer;
-  font-weight: 500;
-  font-size: 14px;
-  margin-bottom: 10px;
-  transition: background 0.15s ease, transform 0.05s ease;
-}
-
-.download-csv-btn:hover {
-  background-color: #0062cc;
-  transform: translateY(-1px);
-}
-
-/* Bulk actions */
-.admin-actions {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.admin-actions select,
-.admin-actions button {
-  height: 38px;
-  min-width: 140px;
-  padding: 0 14px;
-  font-size: 14px;
-  border-radius: 8px;
-  border: 1px solid #ccd0d5;
-  background: #ffffff;
-  cursor: pointer;
-}
-
-/* Tables */
+/* ----------------------------------
+   TABLES (LIVE + HISTORY)
+   using Voila blue headers & light rows
+---------------------------------- */
 .admin-table {
   width: 100%;
   max-width: 1100px;
   margin: 0 auto;
   border-collapse: collapse;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   background: #ffffff;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+  font-size: 0.9rem;
 }
 
 .admin-table th,
 .admin-table td {
-  border: 1px solid #e0e4ea;
-  padding: 8px 10px;
-  font-size: 13px;
+  border: 1px solid var(--border-color);
+  padding: 10px 12px;
 }
 
+/* Strong, readable headers */
 .admin-table th {
-  background: #f6f7fb;
+  background-color: var(--title-color);
+  color: #ffffff;
   font-weight: 600;
-  text-align: left;
+  text-align: center;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
 }
 
-.admin-table tbody tr:nth-child(even) {
-  background: #fbfbfd;
+/* Body cells */
+.admin-table td {
+  text-align: center;
+  vertical-align: middle;
+  background: #fafafa;
 }
 
-/* Select all column */
+/* Alternating row color */
+.admin-table tbody tr:nth-child(even) td {
+  background: #f0f3ff;
+}
+
+/* Hover */
+.admin-table tbody tr:hover td {
+  background: #e6ecff;
+}
+
+/* Select-all column */
 .select-all-th {
   padding: 4px !important;
   text-align: center;
@@ -363,56 +407,35 @@
   height: 16px;
 }
 
-/* Misc */
+/* ----------------------------------
+   MESSAGES
+---------------------------------- */
 .no-records-text {
   margin-top: 16px;
   font-size: 14px;
   color: #666;
-}
-
-/* Tables */
-.admin-table {
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  border-collapse: collapse;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #ffffff;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
-}
-
-.admin-table th,
-.admin-table td {
-  border: 1px solid #e0e4ea;
-  padding: 10px 12px;
-  font-size: 13px;
-}
-
-/* Stronger, clearer headers */
-.admin-table th {
-  background: linear-gradient(135deg, #f0f4ff, #e3e7f3);
-  font-weight: 700;
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: #1f2933;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.admin-table tbody tr:nth-child(even) {
-  background: #fbfbfd;
-}
-
-.admin-table tbody tr:hover {
-  background: #f2f6ff;
-}
-
-/* Select-all column header */
-.select-all-th {
-  padding: 4px !important;
   text-align: center;
-  width: 1%;
-  white-space: nowrap;
+}
+
+/* ----------------------------------
+   RESPONSIVE
+---------------------------------- */
+@media (max-width: 600px) {
+  .admin-table {
+    max-width: 100%;
+    font-size: 0.8rem;
+  }
+
+  .admin-table th,
+  .admin-table td {
+    padding: 8px 6px;
+  }
+
+  .logout-btn {
+    top: 10px;
+    right: 10px;
+    padding: 6px 12px;
+    height: 34px;
+    font-size: 12px;
+  }
 }
