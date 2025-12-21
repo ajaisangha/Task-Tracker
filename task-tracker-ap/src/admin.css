@@ -1,21 +1,32 @@
+/* Overlay / Dialog */
 .admin-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.45);
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 999;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
 }
 
 .admin-dialog {
-  background: #fff;
-  padding: 24px;
-  width: 320px;
-  border-radius: 10px;
+  background: #ffffff;
+  padding: 24px 28px;
+  width: 360px;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.admin-dialog-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .admin-dialog input {
@@ -23,55 +34,88 @@
   padding: 0 12px;
   font-size: 14px;
   border-radius: 6px;
-  border: 1px solid #ccc;
+  border: 1px solid #ccd0d5;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-dialog input:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.18);
 }
 
 .admin-dialog-buttons {
   display: flex;
   gap: 10px;
+  margin-top: 4px;
 }
 
 .admin-dialog-buttons button {
   height: 40px;
   flex: 1;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.admin-dialog-buttons button:hover {
+  transform: translateY(-1px);
+}
+
+.admin-dialog-buttons button:active {
+  transform: translateY(0);
+}
+
+.admin-dialog-buttons button:not(.secondary) {
+  background: #007bff;
+  color: #ffffff;
 }
 
 .admin-dialog-buttons .secondary {
-  background: #f10000;
+  background: #f4f4f4;
+  color: #333333;
 }
 
+/* Alerts */
 .admin-error {
-  color: #c00;
+  color: #c62828;
   font-size: 13px;
   text-align: center;
 }
 
 .admin-success {
-  color: green;
+  color: #2e7d32;
   font-size: 13px;
   text-align: center;
 }
 
+/* Page Layout */
 .admin-page {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 20px 16px 40px;
   position: relative;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
 }
 
 .admin-topbar {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .admin-title {
   font-size: 26px;
   font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
-/* FIX LOGOUT BUTTON ON TOP RIGHT */
+/* Logout button */
 .logout-btn {
   position: fixed;
   top: 16px;
@@ -79,57 +123,129 @@
   background: #b00020;
   color: white;
   padding: 8px 16px;
-  border-radius: 6px;
+  border-radius: 999px;
   height: 40px;
   z-index: 1000;
   cursor: pointer;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  transition: background 0.15s ease, transform 0.05s ease;
 }
 
-/* TOGGLE */
+.logout-btn:hover {
+  background: #c62828;
+  transform: translateY(-1px);
+}
+
+/* Toggle */
 .admin-toggle {
   display: flex;
   justify-content: center;
   gap: 12px;
-  margin: 16px 0;
+  margin: 16px 0 20px;
 }
 
 .admin-toggle button {
   height: 40px;
-  padding: 0 18px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid #d0d7de;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333333;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.admin-toggle button:hover {
+  background: #f4f6f8;
 }
 
 .admin-toggle .active {
   background: #007bff;
+  border-color: #007bff;
   color: white;
+  box-shadow: 0 4px 12px rgba(0, 123, 255, 0.25);
 }
 
-/* HISTORY CONTROLS */
+/* Buttons */
+.primary-btn {
+  margin-top: 16px;
+  background-color: #007bff;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  height: 40px;
+  padding: 0 20px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.primary-btn:hover {
+  background-color: #0062cc;
+  transform: translateY(-1px);
+}
+
+/* History & Filters */
+.history-view {
+  margin-top: 8px;
+}
+
+.history-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.date-range-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.date-range-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.date-range-column label {
+  font-size: 13px;
+  color: #555;
+}
+
+.date-range-column input {
+  height: 38px;
+  padding: 0 10px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #ccd0d5;
+}
+
+/* History / live filter controls */
 .history-controls {
   display: flex;
-  flex-direction: column; /* stack CSV button, text, then filters */
+  flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-  margin-bottom: 20px;
-}
-
-.download-csv-btn {
-  background-color: #007bff;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  height: 42px;
-  padding: 0 16px;
-  cursor: pointer;
-  font-weight: bold;
+  margin-top: 18px;
+  margin-bottom: 16px;
 }
 
 .filter-text {
-  font-weight: bold;
-  font-size: 16px;
-  margin-bottom: 4px;
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 2px;
 }
 
-/* FILTER INPUTS LINE */
 .filter-inputs {
   display: flex;
   flex-wrap: nowrap;
@@ -140,71 +256,96 @@
 
 .filter-inputs input,
 .filter-inputs select {
-  height: 42px;
+  height: 38px;
   min-width: 140px;
-  padding: 0 12px;
+  padding: 0 10px;
   font-size: 14px;
   border-radius: 6px;
-  border: 1px solid #ccc;
+  border: 1px solid #ccd0d5;
   background: #fff;
   flex-shrink: 0;
 }
 
 .filter-inputs input[type="number"] {
-  min-width: 100px;
+  min-width: 110px;
 }
 
-/* BULK ACTIONS */
+/* Download CSV */
+.download-csv-btn {
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  height: 40px;
+  padding: 0 18px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 10px;
+  transition: background 0.15s ease, transform 0.05s ease;
+}
+
+.download-csv-btn:hover {
+  background-color: #0062cc;
+  transform: translateY(-1px);
+}
+
+/* Bulk actions */
 .admin-actions {
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 14px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .admin-actions select,
 .admin-actions button {
-  height: 42px;
+  height: 38px;
   min-width: 140px;
   padding: 0 14px;
   font-size: 14px;
-  border-radius: 6px;
+  border-radius: 8px;
+  border: 1px solid #ccd0d5;
+  background: #ffffff;
+  cursor: pointer;
 }
 
-/* TABLE */
-table {
+/* Tables */
+.admin-table {
   width: 100%;
   max-width: 1100px;
   margin: 0 auto;
   border-collapse: collapse;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
 }
 
-th,
-td {
-  border: 1px solid #ccc;
-  padding: 8px;
-  font-size: 14px;
+.admin-table th,
+.admin-table td {
+  border: 1px solid #e0e4ea;
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
-th {
-  background: #f2f2f2;
+.admin-table th {
+  background: #f6f7fb;
+  font-weight: 600;
+  text-align: left;
 }
 
-tbody tr:nth-child(even) {
-  background: #fafafa;
+.admin-table tbody tr:nth-child(even) {
+  background: #fbfbfd;
 }
 
-.select-col {
-  width: 1%;
-  white-space: nowrap;
-  padding-left: 10px;
-  padding-right: 10px;
-}
-
+/* Select all column */
 .select-all-th {
   padding: 4px !important;
   text-align: center;
+  width: 1%;
+  white-space: nowrap;
 }
 
 .select-all-wrap {
@@ -220,4 +361,58 @@ tbody tr:nth-child(even) {
   padding: 0;
   width: 16px;
   height: 16px;
+}
+
+/* Misc */
+.no-records-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: #666;
+}
+
+/* Tables */
+.admin-table {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  border-collapse: collapse;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+}
+
+.admin-table th,
+.admin-table td {
+  border: 1px solid #e0e4ea;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+/* Stronger, clearer headers */
+.admin-table th {
+  background: linear-gradient(135deg, #f0f4ff, #e3e7f3);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #1f2933;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-table tbody tr:nth-child(even) {
+  background: #fbfbfd;
+}
+
+.admin-table tbody tr:hover {
+  background: #f2f6ff;
+}
+
+/* Select-all column header */
+.select-all-th {
+  padding: 4px !important;
+  text-align: center;
+  width: 1%;
+  white-space: nowrap;
 }

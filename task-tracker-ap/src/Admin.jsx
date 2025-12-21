@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { auth, db } from "./firebase";
 import {
   signInWithEmailAndPassword,
@@ -15,12 +15,10 @@ import {
   getDocs,
   query,
   orderBy,
+  where,
 } from "firebase/firestore";
 import "./admin.css";
 
-/* ===============================
-   CONSTANTS
-================================ */
 const DEPARTMENT_ORDER = [
   "Others",
   "Tote Wash",
@@ -80,35 +78,46 @@ const DEPARTMENTS = {
 };
 
 export default function Admin({ onExit }) {
-  /* ================= AUTH ================= */
+  /* ============ AUTH ============ */
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
 
-  /* ================= VIEW ================= */
+  /* ============ VIEW ============ */
   const [view, setView] = useState("live");
 
-  /* ================= LIVE DATA ================= */
+  /* ============ LIVE DATA ============ */
   const [activeTasks, setActiveTasks] = useState([]);
   const [, forceTick] = useState(0);
 
-  /* ================= FILTERS ================= */
+  /* ============ LIVE FILTERS ============ */
   const [fEmp, setFEmp] = useState("");
   const [fDept, setFDept] = useState("");
   const [fTask, setFTask] = useState("");
   const [fDate, setFDate] = useState("");
   const [fMin, setFMin] = useState("");
 
-  /* ================= SELECTION ================= */
+  /* ============ SELECTION / BULK ============ */
   const [selected, setSelected] = useState([]);
-
-  /* ================= BULK ================= */
   const [bulkDept, setBulkDept] = useState("");
   const [bulkTask, setBulkTask] = useState("");
 
-  /* ================= LOGIN ================= */
+  /* ============ HISTORY RANGE & DATA ============ */
+  const [startDate, setStartDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [historyData, setHistoryData] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  /* ============ HISTORY FILTERS ============ */
+  const [hEmp, setHEmp] = useState("");
+  const [hDept, setHDept] = useState("");
+  const [hTask, setHTask] = useState("");
+
+  /* ============ AUTH ============ */
   const login = async () => {
     setError("");
     try {
@@ -142,7 +151,7 @@ export default function Admin({ onExit }) {
     }
   };
 
-  /* ================= PERSISTENT LOGIN ================= */
+  /* ============ PERSISTENT LOGIN ============ */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -153,7 +162,7 @@ export default function Admin({ onExit }) {
     return unsubscribe;
   }, []);
 
-  /* ================= LIVE SUBSCRIBE ================= */
+  /* ============ LIVE SUBSCRIBE ============ */
   useEffect(() => {
     if (!loggedIn) return;
 
@@ -161,24 +170,23 @@ export default function Admin({ onExit }) {
       const rows = [];
       snap.forEach((d) => {
         const data = d.data();
-        if (data.task !== "Shift End") {
-          rows.push(data);
-        }
+        if (data.task !== "Shift End") rows.push(data);
       });
       setActiveTasks(rows);
     });
   }, [loggedIn]);
 
-  /* ================= TIMER ================= */
+  /* ============ TIMER ============ */
   useEffect(() => {
     const i = setInterval(() => forceTick((t) => t + 1), 1000);
     return () => clearInterval(i);
   }, []);
 
-  /* ================= HELPERS ================= */
+  /* ============ HELPERS ============ */
   const durationSecs = (r) =>
     Math.max(0, Math.floor((Date.now() - new Date(r.startTime)) / 1000));
 
+  // Always HH:MM:SS
   const fmt = (s) =>
     `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(
       Math.floor((s % 3600) / 60)
@@ -187,6 +195,81 @@ export default function Admin({ onExit }) {
   const parseTerms = (t) =>
     t.toLowerCase().split(/[\s,]+/).filter(Boolean);
 
+  const toLocalDateTimeParts = (iso) => {
+    if (!iso) return { date: "", time: "" };
+    const d = new Date(iso);
+    const date = d.toLocaleDateString();
+    const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return { date, time };
+  };
+
+  /* ============ AGGREGATION HELPER ============ */
+  const aggregateEmployeeLogs = (logs) => {
+    const groups = {};
+
+    logs.forEach((r) => {
+      const key = `${r.task}|${r.department || ""}`;
+
+      if (!groups[key]) {
+        groups[key] = {
+          task: r.task,
+          department: r.department || "",
+          startTime: r.startTime,
+          endTime: r.endTime || null,
+          totalSeconds: 0,
+          lastShiftEndStart: null,
+        };
+      }
+
+      const g = groups[key];
+
+      if (r.task === "Shift End") {
+        g.lastShiftEndStart =
+          !g.lastShiftEndStart ||
+          new Date(r.startTime) > new Date(g.lastShiftEndStart)
+            ? r.startTime
+            : g.lastShiftEndStart;
+        return;
+      }
+
+      if (!r.endTime) return;
+
+      const dur = (new Date(r.endTime) - new Date(r.startTime)) / 1000;
+      g.totalSeconds += dur;
+
+      if (!g.endTime || new Date(r.endTime) > new Date(g.endTime)) {
+        g.endTime = r.endTime;
+      }
+    });
+
+    const result = [];
+
+    Object.values(groups).forEach((g) => {
+      if (g.task === "Shift End") {
+        if (g.lastShiftEndStart) {
+          result.push({
+            task: g.task,
+            department: g.department,
+            startTime: g.lastShiftEndStart,
+            endTime: "",
+            durationSeconds: 0,
+          });
+        }
+      } else if (g.totalSeconds > 0) {
+        result.push({
+          task: g.task,
+          department: g.department,
+          startTime: g.startTime,
+          endTime: g.endTime,
+          durationSeconds: g.totalSeconds,
+        });
+      }
+    });
+
+    return result;
+  };
+
+  /* ============ LIVE FILTERED ROWS ============ */
   const filtered = activeTasks.filter((r) => {
     if (fEmp) {
       const terms = parseTerms(fEmp);
@@ -203,7 +286,7 @@ export default function Admin({ onExit }) {
   const allSelected =
     filtered.length > 0 && selected.length === filtered.length;
 
-  /* ================= BULK UPDATE ================= */
+  /* ============ BULK UPDATE ============ */
   const bulkUpdate = async () => {
     if (!selected.length || !bulkDept || !bulkTask) return;
 
@@ -232,16 +315,87 @@ export default function Admin({ onExit }) {
     setBulkTask("");
   };
 
-  /* ================= CSV EXPORT ================= */
-  const exportCSV = async () => {
-    const snap = await getDocs(
-      query(collection(db, "taskLogs"), orderBy("startTime"))
+  /* ============ HISTORY RANGE LOAD ============ */
+  const loadHistory = async () => {
+    if (!startDate || !startTime || !endDate || !endTime) {
+      alert("Please select full date and time range");
+      return;
+    }
+
+    setLoadingHistory(true);
+
+    const start = new Date(`${startDate}T${startTime}`);
+    const end = new Date(`${endDate}T${endTime}`);
+
+    const q = query(
+      collection(db, "taskLogs"),
+      where("startTime", ">=", start.toISOString()),
+      where("startTime", "<=", end.toISOString()),
+      orderBy("startTime")
     );
 
+    const snap = await getDocs(q);
     const rows = snap.docs.map((d) => d.data());
+    setHistoryData(rows);
+    setLoadingHistory(false);
+
+    setHEmp("");
+    setHDept("");
+    setHTask("");
+  };
+
+  /* ============ HISTORY FILTERED ROWS ============ */
+  const historyFiltered = historyData.filter((r) => {
+    if (hEmp) {
+      const terms = parseTerms(hEmp);
+      if (!terms.some((t) => r.employeeId.toLowerCase().includes(t)))
+        return false;
+    }
+    if (hDept && r.department !== hDept) return false;
+    if (hTask && r.task !== hTask) return false;
+    return true;
+  });
+
+  /* ============ HISTORY AGGREGATED VIEW ============ */
+  const historyAggregated = useMemo(() => {
+    if (!historyFiltered.length) return [];
 
     const byEmployee = {};
-    rows.forEach((r) => {
+    historyFiltered.forEach((r) => {
+      if (!byEmployee[r.employeeId]) byEmployee[r.employeeId] = [];
+      byEmployee[r.employeeId].push(r);
+    });
+
+    const rows = [];
+
+    Object.keys(byEmployee)
+      .sort()
+      .forEach((emp) => {
+        const logs = byEmployee[emp].sort(
+          (a, b) => new Date(a.startTime) - new Date(b.startTime)
+        );
+        const aggregated = aggregateEmployeeLogs(logs);
+
+        aggregated.forEach((row) => {
+          rows.push({
+            employeeId: emp,
+            ...row,
+          });
+        });
+      });
+
+    return rows;
+  }, [historyFiltered]);
+
+  /* ============ EXPORT CSV (HISTORY) ============ */
+  const exportCSV = () => {
+    if (!historyAggregated.length) {
+      alert("No data to export");
+      return;
+    }
+
+    const byEmployee = {};
+    historyAggregated.forEach((r) => {
       if (!byEmployee[r.employeeId]) byEmployee[r.employeeId] = [];
       byEmployee[r.employeeId].push(r);
     });
@@ -251,43 +405,29 @@ export default function Admin({ onExit }) {
     Object.keys(byEmployee)
       .sort()
       .forEach((emp, empIndex) => {
-        const logs = byEmployee[emp].sort(
-          (a, b) => new Date(a.startTime) - new Date(b.startTime)
-        );
+        const rows = byEmployee[emp];
 
         csv += `${emp}\n`;
-        csv += `department,task,startTime,endTime,duration\n`;
+        csv += "task,department,startDate,startTime,endDate,endTime,duration\n";
 
-        let aggregate = {};
+        rows.forEach((row) => {
+          const { date: sDate, time: sTime } = toLocalDateTimeParts(
+            row.startTime
+          );
+          const { date: eDate, time: eTime } = toLocalDateTimeParts(
+            row.endTime
+          );
 
-        logs.forEach((r) => {
-          if (r.task === "Shift End" || !r.endTime) return;
+          const duration =
+            row.task === "Shift End"
+              ? ""
+              : fmt(row.durationSeconds || 0);
 
-          const key = `${r.department}|${r.task}`;
-          const dur = (new Date(r.endTime) - new Date(r.startTime)) / 1000;
-
-          if (!aggregate[key]) {
-            aggregate[key] = {
-              department: r.department,
-              task: r.task,
-              startTime: r.startTime,
-              endTime: r.endTime,
-              duration: dur,
-            };
-          } else {
-            aggregate[key].duration += dur;
-            aggregate[key].endTime = r.endTime;
-          }
-        });
-
-        Object.values(aggregate).forEach((a) => {
-          csv += `${a.department},${a.task},${a.startTime},${a.endTime},${fmt(
-            a.duration
-          )}\n`;
+          csv += `${row.task},${row.department},${sDate},${sTime},${eDate},${eTime},${duration}\n`;
         });
 
         if (empIndex < Object.keys(byEmployee).length - 1) {
-          csv += `\n`;
+          csv += "\n";
         }
       });
 
@@ -300,15 +440,15 @@ export default function Admin({ onExit }) {
     a.click();
   };
 
-  /* ================= LOGIN UI ================= */
+  /* ============ LOGIN UI ============ */
   if (!loggedIn) {
     return (
       <div className="admin-overlay">
         <div className="admin-dialog">
-          <h3>Admin Login</h3>
+          <h3 className="admin-dialog-title">Task Tracker Admin</h3>
 
           <input
-            placeholder="Email"
+            placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
@@ -322,7 +462,7 @@ export default function Admin({ onExit }) {
           {error && <div className="admin-error">{error}</div>}
           {resetEmailSent && (
             <div className="admin-success">
-              Password reset email sent successfully!
+              Password reset email sent successfully.
             </div>
           )}
 
@@ -340,11 +480,10 @@ export default function Admin({ onExit }) {
     );
   }
 
-  /* ================= ADMIN PAGE ================= */
+  /* ============ ADMIN PAGE ============ */
   return (
     <div className="admin-page">
       <div className="admin-topbar">
-        <div />
         <h2 className="admin-title">Task Tracker</h2>
       </div>
 
@@ -367,14 +506,11 @@ export default function Admin({ onExit }) {
         </button>
       </div>
 
+      {/* ============ LIVE VIEW ============ */}
       {view === "live" && (
         <>
           <div className="history-controls">
-            <button className="download-csv-btn" onClick={exportCSV}>
-              Download CSV
-            </button>
-
-            <div className="filter-text">Filters</div>
+            <div className="filter-text">Live Filters</div>
 
             <div className="filter-inputs">
               <input
@@ -404,7 +540,7 @@ export default function Admin({ onExit }) {
               />
               <input
                 type="number"
-                placeholder="Min"
+                placeholder="Min (minutes)"
                 value={fMin}
                 onChange={(e) => setFMin(e.target.value)}
               />
@@ -417,7 +553,7 @@ export default function Admin({ onExit }) {
                 value={bulkDept}
                 onChange={(e) => setBulkDept(e.target.value)}
               >
-                <option value="">Dept</option>
+                <option value="">Department</option>
                 {DEPARTMENT_ORDER.map((d) => (
                   <option key={d}>{d}</option>
                 ))}
@@ -437,10 +573,10 @@ export default function Admin({ onExit }) {
             </div>
           )}
 
-          <table>
+          <table className="admin-table">
             <thead>
               <tr>
-                <th>
+                <th scope="col" className="select-all-th">
                   <label className="select-all-wrap">
                     <input
                       type="checkbox"
@@ -456,11 +592,11 @@ export default function Admin({ onExit }) {
                     <span>Select All</span>
                   </label>
                 </th>
-                <th>Employee</th>
-                <th>Task</th>
-                <th>Dept</th>
-                <th>Start</th>
-                <th>Duration</th>
+                <th scope="col">Employee</th>
+                <th scope="col">Task</th>
+                <th scope="col">Dept</th>
+                <th scope="col">Start</th>
+                <th scope="col">Duration</th>
               </tr>
             </thead>
 
@@ -490,6 +626,141 @@ export default function Admin({ onExit }) {
             </tbody>
           </table>
         </>
+      )}
+
+      {/* ============ HISTORY VIEW ============ */}
+      {view === "history" && (
+        <div className="history-view">
+          <h3 className="history-title">History Range</h3>
+
+          <div className="date-range-inputs">
+            <div className="date-range-column">
+              <label>Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+              <label>Start Time</label>
+              <input
+                type="time"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+              />
+            </div>
+            <div className="date-range-column">
+              <label>End Date</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+              <label>End Time</label>
+              <input
+                type="time"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <button
+            className="primary-btn"
+            onClick={loadHistory}
+            disabled={loadingHistory}
+          >
+            {loadingHistory ? "Loading..." : "View History"}
+          </button>
+
+          {historyData.length > 0 && (
+            <div className="history-controls">
+              <div className="filter-text">History Filters</div>
+              <div className="filter-inputs">
+                <input
+                  placeholder="Employee(s)"
+                  value={hEmp}
+                  onChange={(e) => setHEmp(e.target.value)}
+                />
+                <select
+                  value={hDept}
+                  onChange={(e) => setHDept(e.target.value)}
+                >
+                  <option value="">All Depts</option>
+                  {DEPARTMENT_ORDER.map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+                <select
+                  value={hTask}
+                  onChange={(e) => setHTask(e.target.value)}
+                  disabled={!hDept}
+                >
+                  <option value="">All Tasks</option>
+                  {hDept &&
+                    DEPARTMENTS[hDept].map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {historyAggregated.length > 0 && (
+            <>
+              <button className="download-csv-btn" onClick={exportCSV}>
+                Download CSV
+              </button>
+
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Employee</th>
+                    <th scope="col">Department</th>
+                    <th scope="col">Task</th>
+                    <th scope="col">Start Date</th>
+                    <th scope="col">Start Time</th>
+                    <th scope="col">End Date</th>
+                    <th scope="col">End Time</th>
+                    <th scope="col">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyAggregated.map((r, i) => {
+                    const { date: sDate, time: sTime } =
+                      toLocalDateTimeParts(r.startTime);
+                    const { date: eDate, time: eTime } =
+                      toLocalDateTimeParts(r.endTime);
+
+                    const duration =
+                      r.task === "Shift End"
+                        ? ""
+                        : fmt(r.durationSeconds || 0);
+
+                    return (
+                      <tr key={i}>
+                        <td>{r.employeeId}</td>
+                        <td>{r.department}</td>
+                        <td>{r.task}</td>
+                        <td>{sDate}</td>
+                        <td>{sTime}</td>
+                        <td>{eDate}</td>
+                        <td>{eTime}</td>
+                        <td>{duration}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {historyData.length > 0 &&
+            historyAggregated.length === 0 && (
+              <p className="no-records-text">
+                No records match the selected filters.
+              </p>
+            )}
+        </div>
       )}
     </div>
   );
